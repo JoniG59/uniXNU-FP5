@@ -23,7 +23,9 @@
 
 This checkout is being used to develop a UniXNU port for the Fairphone 5 (FP5,
 Qualcomm QCM6490). The device and SoC directories are **porting scaffolds**.
-There is no bootable FP5 image yet: no FP5 Mu-Silicium UEFI port is known, the
+As of 2026-11-22 a local Mu-Silicium `fp5Pkg` (patches in `UniXNU-FP5/mu-silicium/patches`) builds with the
+UniXNU modules and is packed into a header-v3 `boot.img` for `fastboot boot` only. It is **untested on hardware**
+and contains **no XNU kernel and no iOS**, so iOS cannot boot yet (see `NEXT_STEPS.md`). The
 QCM6490 platform description is incomplete, and live memory/DTB/overlay selection
 is not confirmed. The board remains `example = true` so the build cannot be
 treated as ready for hardware.

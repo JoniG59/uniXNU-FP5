@@ -89,6 +89,36 @@ Abschnitt `[uefi_stock_map]` in `UniXNU-FP5/memory.toml`, Abschnitt in
   Referenz (`uefiplat.cfg` enthält keine RAM-Größe; Qualcomm-UEFI liest sie
   zur Laufzeit über DDR-Info/SMEM).
 
+## Stand 2026-11-22: UniXNU-boot.img gebaut (ungetestet)
+- **Artefakt (nur lokal, nicht im Repo):** `out/fp5-mu/boot-unixnu.img`, 1 634 304 Bytes,
+  sha256 `83789ac59e34d4e098360dbc828e9c138504935ed313ef5b797ded08d0c2317e` (auch in `out/fp5-mu/SHA256SUMS`),
+  `boot.json` mit `hardware_tested: false`.
+- Inhalt: Android-Boot-Header **v3** (Seitengröße 4096, Header 1580 Bytes, leere Ramdisk, leere Cmdline),
+  Kernel-Segment = gzip(BootShim 112 Bytes + `SILICIUM_UEFI.fd` 0x200000 Bytes, FD_BASE 0x9FD00000) + angehängte
+  `fp5.dtb` (vendor_boot-DTB 16 „YUPIK-IOT“ aus VT32). Gebaut mit `scripts/unixnu/bootimg.py`, Gegenprobe mit
+  `unpack_bootimg` und Byte-Vergleich (FD und DTB identisch).
+- Firmware: Mu-Silicium Branch `fp5` + Patches `UniXNU-FP5/mu-silicium/patches/0001–0004`, Build mit UNIXNU=1
+  (Module UniXNU, UniXNUDxe, UniXNURamDiskDxe, DarwinBoot in `Guid.xref`).
+- **Warum v3:** gleiche Version wie FP5-Stock-`boot.img`/`vendor_boot.img`; Mu-`spacewar` (Nothing Phone 1,
+  gleicher Kodiak-SoC) packt ebenfalls v3 + angehängte DTB. Mu-`fp5.toml` (Patch 0004) und `board.toml` sind
+  jetzt einheitlich. Folge (Annahme, nicht geprüft): Bei v3 kombiniert ABL das Image mit dem **geflashten
+  `vendor_boot`** des aktiven Slots (Vendor-Ramdisk, Vendor-Cmdline, ggf. dessen DTB/DTBO statt der angehängten DTB).
+  Fallback, falls ABL v3 ablehnt: v1 wie Mu-`lisa` (ebenfalls Kodiak).
+- `board.toml`: `[firmware]` ausgefüllt (config `fp5`, dsc, fd, packages, `UNIXNU = "1"`),
+  `os_profile = "ios-16.7.16-20H392"` (Profil aus `refs/unixnu-dragon` nach `profiles/os/` kopiert; es ist für
+  ein anderes Gerät geschrieben und für FP5 nicht angepasst). `example = true` bleibt.
+
+**Ehrlich:** Das Image startet höchstens die UEFI-Umgebung. Es enthält **keinen XNU-Kernel, kein iOS, keine
+Payload/Ramdisk** – iOS kann damit nicht booten. Auf Hardware ist nichts getestet.
+
+**Risiken beim späteren Test** (nur `fastboot boot`, nie `flash`, kein Slot-Wechsel):
+- ABL lehnt das Image ab oder hängt; FD-Bereich 0x9FD00000 könnte nach ABL-Übergabe belegt sein.
+- Framebuffer 1224×2700 und Speicherkarte sind nicht am Gerät geprüft; TzDxeLA ungepatcht → Absturz möglich.
+- Qualcomm-DXE-Treiber stammen aus dem VT32-`xbl.elf`, das Gerät läuft mit VT31-Bootloader.
+- Ein Absturz in UEFI erfordert einen Neustart per Taste (Power lange drücken); Daten bleiben bei RAM-Boot
+  voraussichtlich unberührt (nicht garantiert → Backup).
+
 ## Noch offen (Blocker)
-1. UEFI-Firmware (Mu-Silicium) für FP5/QCM6490 – existiert nicht, muss portiert werden. Ohne sie gibt es kein bootfähiges Image.
+1. ~~UEFI-Firmware (Mu-Silicium) für FP5/QCM6490~~ – seit 2026-11-22 als `fp5Pkg` gebaut (Patches 0001–0004), **auf Hardware ungetestet**.
+1a. XNU-Kernel (QCM6490-Maschinenkonfiguration), Payload und iOS-Ramdisk fehlen noch.
 2. ~~Speicherkarte~~ – seit 2026-11-22 optional: `uefiplat.cfg` (VT31 = VT32) liefert die UEFI-Karte; ein Root-Dump wäre nur noch eine Gegenprobe am Gerät (kein Root vorhanden). Ursprünglich: `adb shell su -c 'cat /proc/iomem' > fp5-iomem.txt` und `adb shell su -c 'cat /sys/firmware/fdt' > fp5.dtb`.

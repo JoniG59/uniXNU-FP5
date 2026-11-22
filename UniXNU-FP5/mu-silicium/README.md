@@ -7,6 +7,7 @@ Patches gegen Mu-Silicium `cc64daf0e05b7533995e4fd01e0f5043ec26c137` (Branch `fp
 | 0001 | SEC reicht das ABL-Einsprungsargument (x0 = FDT-Zeiger) als GUID-HOB `DAEE82E6-8090-4E72-BFB9-78C13CD4E359` weiter (für UniXNURamDiskDxe). |
 | 0002 | `Platforms/Fairphone/fp5Pkg` + `Resources/Configs/fp5.toml`. |
 | 0003 | `fp5.dsc`: im `!ifdef UNIXNU`-Block die LibraryClasses `UniXNULib` (UniXNUPkg) und `FdtLib` (MdePkg/BaseFdtLib) eintragen; nötig für den Build mit `BLD_*_UNIXNU=1`. |
+| 0004 | `Resources/Configs/fp5.toml`: Boot-Image-Header v3 statt v1 (wie FP5-Stock-`boot.img` und Mu-`spacewar`, gleicher Kodiak-SoC); passt zu `board.toml [bootimg.image] header_version = 3`. |
 
 ## Anwenden
 
@@ -30,8 +31,11 @@ python3 scripts/gen-fp5-mu-binaries.py out/fp5-uefi-inputs/xbl-fv/inventory.json
 
 ## Stand / offene Punkte
 
-- **Gebaut (2026-11-22), nicht auf Hardware getestet.** `python3 build_uefi.py -d fp5 -r DEBUG` → `Mu-fp5.img`
-  (Android-Boot-Header v1, FD 0x200000 Bytes, DTB = `vendor_boot` DTB 16 „YUPIK-IOT“ aus der VT32-Analyse, lokal nach
+- **UniXNU-Build (2026-11-22), nicht auf Hardware getestet.** FD mit `BLD_*_UNIXNU=1` (UniXNU, UniXNUDxe,
+  UniXNURamDiskDxe, DarwinBoot), gepackt mit `scripts/unixnu/bootimg.py` → `out/fp5-mu/boot-unixnu.img`
+  (Header v3, gzip(BootShim+FD)+DTB, leere Ramdisk). Enthält **keinen** XNU-Kernel und kein iOS.
+- **Erster Build ohne UniXNU (2026-11-22), nicht auf Hardware getestet.** `python3 build_uefi.py -d fp5 -r DEBUG` → `Mu-fp5.img`
+  (damals Android-Boot-Header v1, seit Patch 0004 v3; FD 0x200000 Bytes, DTB = `vendor_boot` DTB 16 „YUPIK-IOT“ aus der VT32-Analyse, lokal nach
   `Resources/DTBs/fp5.dtb` kompiliert und nicht im Repo).
   Lokale Prüfsummen: `noot.img` c185eb2b…2158, `SILICIUM_UEFI.fd` d9f48dcd…8b68 (Stand ohne UniXNU-Module).
 - Build-Abhängigkeiten: nasm, iasl (acpica-tools), mono-devel, uuid-dev, gcc-aarch64-linux-gnu, venv mit `pip-requirements.txt`.
