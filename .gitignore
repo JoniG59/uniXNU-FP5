@@ -13,3 +13,5 @@ out/
 # Python caches
 __pycache__/
 *.pyc
+/drivers/
+/kits/
