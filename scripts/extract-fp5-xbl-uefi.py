@@ -114,8 +114,8 @@ class Walker:
                 self.fv(data, depth + 1, f"{path}/{rec['guid']}")
             elif stype == 0x15:
                 rec["name"] = data.decode("utf-16-le", "replace").rstrip("\x00")
-            elif stype in (0x10, 0x12, 0x19):
-                ext = {0x10: "efi", 0x12: "te", 0x19: "bin"}[stype]
+            elif stype in (0x10, 0x12, 0x13, 0x19):
+                ext = {0x10: "efi", 0x12: "te", 0x13: "depex", 0x19: "bin"}[stype]
                 self.blobs[f"{rec['guid']}.{ext}"] = bytes(data)
             o = (o + size + 3) & ~3
 
