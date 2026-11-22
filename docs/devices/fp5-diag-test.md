@@ -4,6 +4,19 @@ Stand 2026-11-22. **Keines der Images ist auf Hardware getestet.** Alle nur per 
 nie flashen, kein Slot-Wechsel. Nach einem Hänger: Power lange drücken (ca. 15–20 s); laut erstem Test reicht das
 **nicht** zuverlässig – dann Akku kurz entnehmen (beim FP5 möglich). Danach startet Android normal.
 
+## Update 2026-11-22 (3): boot_a … boot_d (A–D mit gepatchter TzDxeLA)
+
+Die Varianten A–D wurden mit der gepatchten `TzDxeLA.patched.efi` (spacewar-Patch, 1 Byte bei RVA 0xD46C) neu gebaut, je mit `FB_DELAY=150000` (0,15 s pro Logzeile). `diag-A..D-*.img` sind dadurch ebenfalls neu und byte-gleich zu `boot_a..d.img`. Alle Images: FD + DTB im Kernel geprüft (`fd_match=true`), `hardware_tested=false`. Images liegen nur lokal in `out/fp5-mu/diag/` und `out/fp5-mu/boot/`.
+
+| Image | Inhalt | Header | SHA256 |
+|---|---|---|---|
+| `boot_a.img` | Mu ohne UniXNU | v3 | `01757f337fd981d703d036fec7d95dbbf20bd575b4eb224dd1601c02ec850363` |
+| `boot_b.img` | Mu ohne UniXNU | v1 | `ce06cf549289e8385744547bbbb6434163d98d481b3eb5ac24dd673cfb51d8ba` |
+| `boot_c.img` | Mu mit UniXNU | v3 | `bab5230db4b55af959f21655a9a916f827936fcb0d6c97f9fe2b3d36b42b9ad4` |
+| `boot_d.img` | Mu ohne UniXNU, DXE-Heap bei 0xE3400000 | v3 | `bbf86f4b3c6164869d5959de111c389cd7573cdad69cf23b7b7e74c2a1b7fdb1` |
+
+Empfohlene Reihenfolge: `boot_b` → `boot_a` → `boot_d` → `boot_c`. Nur `fastboot boot boot_x.img`, nie flashen. Filmen; Kernfrage: läuft der Log nach `TzDxeLA.efi` weiter, oder kommt wieder `ASSERT_EFI_ERROR (Out of Resources)`? Bei Hänger Akku raus.
+
 ## Update 2026-11-22 (2): Ursache eingegrenzt, TzDxeLA-Patch wie spacewar
 
 - Bootloader laut Video: `FP5.VT31.C.114.2026…`. `Binaries-fp5` stammt aus der **VT31**-`xbl.elf`
