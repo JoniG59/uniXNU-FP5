@@ -1,0 +1,107 @@
+From 86b7a658f8d8afc90744e57ceb77da37a22571df Mon Sep 17 00:00:00 2001
+From: JoniG59 <JoniG59@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 12:24:50 +0000
+Subject: [PATCH 1/2] =?UTF-8?q?SEC:=20ABL-Einsprungsargument=20(FDT-Zeiger?=
+ =?UTF-8?q?)=20als=20GUID-HOB=20f=C3=BCr=20UniXNURamDiskDxe=20weitergeben?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ .../Sec/AArch64/ModuleEntryPoint.S            | 10 ++++++++--
+ Silicon/Silicium/SiliciumPkg/Sec/Sec.c        | 20 ++++++++++++++++---
+ 2 files changed, 25 insertions(+), 5 deletions(-)
+
+diff --git a/Silicon/Silicium/SiliciumPkg/Sec/AArch64/ModuleEntryPoint.S b/Silicon/Silicium/SiliciumPkg/Sec/AArch64/ModuleEntryPoint.S
+index 0c05ffa3..7c01800f 100644
+--- a/Silicon/Silicium/SiliciumPkg/Sec/AArch64/ModuleEntryPoint.S
++++ b/Silicon/Silicium/SiliciumPkg/Sec/AArch64/ModuleEntryPoint.S
+@@ -13,6 +13,9 @@
+ .set CTRL_SPAN_BIT, BIT23
+ 
+ ASM_FUNC (_ModuleEntryPoint)
++  // Preserve the Entry Argument (x0, the Bootloader FDT) for SecEntry
++  mov   x19, x0
++
+   // Do Platform Specific Initialization
+   bl    ASM_PFX (PlatformAssemblyInitialize)
+ 
+@@ -51,13 +54,16 @@ ASM_PFX (MainEntryPoint):
+   b.lt  0b
+ 
+   // Set Jump Location
+-  ldr   x0, =ASM_PFX (SecEntry)
++  ldr   x8, =ASM_PFX (SecEntry)
++
++  // Pass the preserved Entry Argument
++  mov   x0, x19
+ 
+   // Clear Frame Pointer
+   mov   x29, xzr
+ 
+   // Jump to C Code
+-  blr   x0
++  blr   x8
+ 
+   // Do Infinite Spin
+   b     .
+diff --git a/Silicon/Silicium/SiliciumPkg/Sec/Sec.c b/Silicon/Silicium/SiliciumPkg/Sec/Sec.c
+index 8d586b35..9562e4f8 100644
+--- a/Silicon/Silicium/SiliciumPkg/Sec/Sec.c
++++ b/Silicon/Silicium/SiliciumPkg/Sec/Sec.c
+@@ -18,6 +18,13 @@
+ 
+ #include "Sec.h"
+ 
++//
++// The Entry Argument (x0) is stored in this HOB as a UINT64 for later Phases.
++//
++STATIC CONST EFI_GUID mEntryArgHobGuid = {
++  0xDAEE82E6, 0x8090, 0x4E72, { 0xBF, 0xB9, 0x78, 0xC1, 0x3C, 0xD4, 0xE3, 0x59 }
++};
++
+ #ifndef MDEPKG_NDEBUG
+ STATIC
+ VOID
+@@ -90,7 +97,9 @@ InitializeMemory (VOID)
+ 
+ STATIC
+ VOID
+-SecMain (VOID)
++SecMain (
++  IN UINT64 EntryArg
++  )
+ {
+   EFI_STATUS Status;
+ 
+@@ -118,6 +127,9 @@ SecMain (VOID)
+     return;
+   }
+ 
++  // Preserve the Entry Argument
++  BuildGuidDataHob (&mEntryArgHobGuid, &EntryArg, sizeof (EntryArg));
++
+   // Build CPU HOB
+   BuildCpuHob (ArmGetPhysicalAddressBits (), PcdGet8 (PcdPrePiCpuIoSize));
+ 
+@@ -148,7 +160,9 @@ SecMain (VOID)
+ }
+ 
+ VOID
+-SecEntry (VOID)
++SecEntry (
++  IN UINT64 EntryArg
++  )
+ {
+   // Disable Data Cache
+   ArmDisableDataCache ();
+@@ -170,5 +184,5 @@ SecEntry (VOID)
+   ArmWriteVBar ((UINTN)SecVectorTable);
+ 
+   // Enter Main SEC Function
+-  SecMain ();
++  SecMain (EntryArg);
+ }
+-- 
+2.39.5
+

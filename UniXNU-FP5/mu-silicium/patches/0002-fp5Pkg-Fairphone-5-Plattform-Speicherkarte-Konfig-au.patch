@@ -1,0 +1,949 @@
+From c58c8e8ecc94d56c9efd0b904d010ab00906d6fd Mon Sep 17 00:00:00 2001
+From: JoniG59 <JoniG59@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 12:30:24 +0000
+Subject: [PATCH 2/2] fp5Pkg: Fairphone-5-Plattform (Speicherkarte/Konfig aus
+ Stock-uefiplat.cfg, UniXNU-Module optional), noch ungebaut
+
+---
+ Platforms/Fairphone/fp5Pkg/DeviceBuild.py     | 202 ++++++++++++++++++
+ .../Fairphone/fp5Pkg/Include/APRIORI.inc      | 106 +++++++++
+ Platforms/Fairphone/fp5Pkg/Include/DXE.inc    |  99 +++++++++
+ Platforms/Fairphone/fp5Pkg/Include/RAW.inc    |  19 ++
+ .../ConfigurationMapLib/ConfigurationMapLib.c |  59 +++++
+ .../ConfigurationMapLib.inf                   |  14 ++
+ .../Library/MemoryMapLib/MemoryMapLib.c       |  73 +++++++
+ .../Library/MemoryMapLib/MemoryMapLib.inf     |  15 ++
+ Platforms/Fairphone/fp5Pkg/fp5.dec            |   0
+ Platforms/Fairphone/fp5Pkg/fp5.dsc            | 100 +++++++++
+ Platforms/Fairphone/fp5Pkg/fp5.fdf            | 130 +++++++++++
+ Resources/Configs/fp5.toml                    |  27 +++
+ 12 files changed, 844 insertions(+)
+ create mode 100644 Platforms/Fairphone/fp5Pkg/DeviceBuild.py
+ create mode 100644 Platforms/Fairphone/fp5Pkg/Include/APRIORI.inc
+ create mode 100644 Platforms/Fairphone/fp5Pkg/Include/DXE.inc
+ create mode 100644 Platforms/Fairphone/fp5Pkg/Include/RAW.inc
+ create mode 100644 Platforms/Fairphone/fp5Pkg/Library/ConfigurationMapLib/ConfigurationMapLib.c
+ create mode 100644 Platforms/Fairphone/fp5Pkg/Library/ConfigurationMapLib/ConfigurationMapLib.inf
+ create mode 100644 Platforms/Fairphone/fp5Pkg/Library/MemoryMapLib/MemoryMapLib.c
+ create mode 100644 Platforms/Fairphone/fp5Pkg/Library/MemoryMapLib/MemoryMapLib.inf
+ create mode 100644 Platforms/Fairphone/fp5Pkg/fp5.dec
+ create mode 100644 Platforms/Fairphone/fp5Pkg/fp5.dsc
+ create mode 100644 Platforms/Fairphone/fp5Pkg/fp5.fdf
+ create mode 100644 Resources/Configs/fp5.toml
+
+diff --git a/Platforms/Fairphone/fp5Pkg/DeviceBuild.py b/Platforms/Fairphone/fp5Pkg/DeviceBuild.py
+new file mode 100644
+index 00000000..61f0e57d
+--- /dev/null
++++ b/Platforms/Fairphone/fp5Pkg/DeviceBuild.py
+@@ -0,0 +1,202 @@
++##
++# Copyright (c) Microsoft Corporation.
++# SPDX-License-Identifier: BSD-2-Clause-Patent
++##
++
++import datetime
++import logging
++import os
++import uuid
++
++from io import StringIO
++from pathlib import Path
++
++from edk2toolext.environment import shell_environment
++from edk2toolext.environment.uefi_build import UefiBuilder
++from edk2toolext.invocables.edk2_platform_build import BuildSettingsManager
++from edk2toolext.invocables.edk2_pr_eval import PrEvalSettingsManager
++from edk2toolext.invocables.edk2_setup import (RequiredSubmodule, SetupSettingsManager)
++from edk2toolext.invocables.edk2_update import UpdateSettingsManager
++from edk2toolext.invocables.edk2_parse import ParseSettingsManager
++from edk2toollib.utility_functions import RunCmd
++
++# ####################################################################################### #
++#                                Common Configuration                                     #
++# ####################################################################################### #
++class CommonPlatform ():
++    PackagesSupported = ("fp5Pkg")
++    ArchSupported = ("AARCH64")
++    TargetsSupported = ("DEBUG", "RELEASE")
++    Scopes = ('fp5', 'gcc_aarch64_linux', 'edk2-build')
++    WorkspaceRoot = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
++    PackagesPath = (
++        "Platforms/Fairphone",
++        "Common/Mu",
++        "Common/Mu_OEM_Sample",
++        "Mu_Basecore",
++        "Silicon/Qualcomm",
++        "Silicon/Silicium",
++        "Silicium-ACPI",
++        "Silicium-ACPI/Silicon/Qualcomm"
++    ) + tuple(p for p in os.environ.get("FP5_EXTRA_PACKAGES_PATH", "").split(os.pathsep) if p)
++
++# ####################################################################################### #
++#                         Configuration for Update & Setup                                #
++# ####################################################################################### #
++class SettingsManager (UpdateSettingsManager, SetupSettingsManager, PrEvalSettingsManager, ParseSettingsManager):
++
++    def GetPackagesSupported (self):
++        return CommonPlatform.PackagesSupported
++
++    def GetArchitecturesSupported (self):
++        return CommonPlatform.ArchSupported
++
++    def GetTargetsSupported (self):
++        return CommonPlatform.TargetsSupported
++
++    def GetRequiredSubmodules (self):
++        return [
++            RequiredSubmodule ("Common/Mu", True),
++            RequiredSubmodule ("Common/Mu_OEM_Sample", True),
++            RequiredSubmodule ("Mu_Basecore", True),
++            RequiredSubmodule ("Silicium-ACPI", True),
++            RequiredSubmodule ("Silicon/Silicium/OpensslPkg/Library/OpensslLib/openssl", True)
++        ]
++
++    def SetArchitectures (self, list_of_requested_architectures):
++        unsupported = set(list_of_requested_architectures) - set(self.GetArchitecturesSupported())
++
++        if (len(unsupported) > 0):
++            errorString = ("Unsupported Architecture Requested: " + " ".join(unsupported))
++            logging.critical (errorString)
++            raise Exception (errorString)
++
++        self.ActualArchitectures = list_of_requested_architectures
++
++    def GetWorkspaceRoot (self):
++        return CommonPlatform.WorkspaceRoot
++
++    def GetActiveScopes (self):
++        return CommonPlatform.Scopes
++
++    def FilterPackagesToTest (self, changedFilesList: list, potentialPackagesList: list) -> list:
++        build_these_packages = []
++        possible_packages = potentialPackagesList.copy ()
++
++        for f in changedFilesList:
++            if "BaseTools" in f:
++                if os.path.splitext(f) not in [".txt", ".md"]:
++                    build_these_packages = possible_packages
++                    break
++
++            if "platform-build-run-steps.yml" in f:
++                build_these_packages = possible_packages
++                break
++
++        return build_these_packages
++
++    def GetPlatformDscAndConfig (self) -> tuple:
++        return ("fp5Pkg/fp5.dsc", {})
++
++    def GetName (self):
++        return "fp5"
++
++    def GetPackagesPath (self):
++        return CommonPlatform.PackagesPath
++
++# ####################################################################################### #
++#                         Actual Configuration for Platform Build                         #
++# ####################################################################################### #
++class PlatformBuilder (UefiBuilder, BuildSettingsManager):
++    def __init__ (self):
++        UefiBuilder.__init__ (self)
++
++    def AddCommandLineOptions (self, parserObj):
++        parserObj.add_argument('-a', "--arch", dest="build_arch", type=str, default="AARCH64", help="Optional - CSV of architecture to build. AARCH64 is used for PEI and DXE and is the only valid option for this platform.")
++
++    def RetrieveCommandLineOptions (self, args):
++        if args.build_arch.upper() != "AARCH64":
++            raise Exception("Invalid Arch Specified.  Please see comments in DeviceBuild.py::PlatformBuilder::AddCommandLineOptions")
++
++    def GetWorkspaceRoot (self):
++        return CommonPlatform.WorkspaceRoot
++
++    def GetPackagesPath (self):
++        result = [ shell_environment.GetBuildVars().GetValue("FEATURE_CONFIG_PATH", "") ]
++
++        for a in CommonPlatform.PackagesPath:
++            result.append(a)
++
++        return result
++
++    def GetActiveScopes (self):
++        return CommonPlatform.Scopes
++
++    def GetName (self):
++        return "fp5Pkg"
++
++    def GetLoggingLevel (self, loggerType):
++        return logging.INFO
++        return super().GetLoggingLevel(loggerType)
++
++    def SetPlatformEnv (self):
++        logging.debug ("PlatformBuilder SetPlatformEnv")
++
++        self.env.SetValue ("PRODUCT_NAME", "fp5", "Platform Hardcoded")
++        self.env.SetValue ("ACTIVE_PLATFORM", "fp5Pkg/fp5.dsc", "Platform Hardcoded")
++        self.env.SetValue ("TARGET_ARCH", "AARCH64", "Platform Hardcoded")
++        self.env.SetValue ("TOOL_CHAIN_TAG", "CLANGPDB", "set default to clangpdb")
++        self.env.SetValue ("EMPTY_DRIVE", "FALSE", "Default to false")
++        self.env.SetValue ("RUN_TESTS", "FALSE", "Default to false")
++        self.env.SetValue ("SHUTDOWN_AFTER_RUN", "FALSE", "Default to false")
++        self.env.SetValue ("BLD_*_BUILDID_STRING", "Unknown", "Default")
++        self.env.SetValue ("BUILDREPORTING", "TRUE", "Enabling build report")
++        self.env.SetValue ("BUILDREPORT_TYPES", "PCD DEPEX FLASH BUILD_FLAGS LIBRARY FIXED_ADDRESS HASH", "Setting build report types")
++        self.env.SetValue ("BLD_*_MEMORY_PROTECTION", "TRUE", "Default")
++        self.env.SetValue ("BLD_*_SHIP_MODE", "FALSE", "Default")
++        self.env.SetValue ("BLD_*_ENABLE_SECUREBOOT", self.env.GetValue("ENABLE_SECUREBOOT"), "Default")
++        self.env.SetValue ("BLD_*_FD_BASE", self.env.GetValue("FD_BASE"), "Default")
++        self.env.SetValue ("BLD_*_FD_SIZE", self.env.GetValue("FD_SIZE"), "Default")
++        self.env.SetValue ("BLD_*_FD_BLOCKS", self.env.GetValue("FD_BLOCKS"), "Default")
++
++        return 0
++
++    def PlatformPreBuild (self):
++        return 0
++
++    def PlatformPostBuild (self):
++        return 0
++
++    def FlashRomImage (self):
++        return 0
++
++if __name__ == "__main__":
++    import argparse
++    import sys
++
++    from edk2toolext.invocables.edk2_platform_build import Edk2PlatformBuild
++    from edk2toolext.invocables.edk2_setup import Edk2PlatformSetup
++    from edk2toolext.invocables.edk2_update import Edk2Update
++
++    SCRIPT_PATH = os.path.relpath (__file__)
++
++    parser = argparse.ArgumentParser (add_help=False)
++
++    parse_group = parser.add_mutually_exclusive_group()
++
++    parse_group.add_argument ("--update", "--UPDATE", action='store_true', help="Invokes stuart_update")
++    parse_group.add_argument ("--setup",  "--SETUP",  action='store_true', help="Invokes stuart_setup")
++
++    args, remaining = parser.parse_known_args()
++
++    new_args = ["stuart", "-c", SCRIPT_PATH]
++    new_args = new_args + remaining
++
++    sys.argv = new_args
++
++    if args.setup:
++        Edk2PlatformSetup().Invoke()
++    elif args.update:
++        Edk2Update().Invoke()
++    else:
++        Edk2PlatformBuild().Invoke()
+diff --git a/Platforms/Fairphone/fp5Pkg/Include/APRIORI.inc b/Platforms/Fairphone/fp5Pkg/Include/APRIORI.inc
+new file mode 100644
+index 00000000..aaddce2b
+--- /dev/null
++++ b/Platforms/Fairphone/fp5Pkg/Include/APRIORI.inc
+@@ -0,0 +1,106 @@
++APRIORI DXE {
++  INF MdeModulePkg/Core/Dxe/DxeMain.inf
++  INF MdeModulePkg/Universal/PCD/Dxe/Pcd.inf
++
++  INF Binaries-fp5/QcomPkg/Drivers/EnvDxe/EnvDxe.inf
++
++  INF MdeModulePkg/Universal/ReportStatusCodeRouter/RuntimeDxe/ReportStatusCodeRouterRuntimeDxe.inf
++  INF MdeModulePkg/Universal/StatusCodeHandler/RuntimeDxe/StatusCodeHandlerRuntimeDxe.inf
++  INF MdeModulePkg/Core/RuntimeDxe/RuntimeDxe.inf
++  INF ArmPkg/Drivers/CpuDxe/CpuDxe.inf
++  INF ArmPkg/Drivers/ArmGicDxe/ArmGicDxe.inf
++  INF EmbeddedPkg/MetronomeDxe/MetronomeDxe.inf
++  INF ArmPkg/Drivers/TimerDxe/TimerDxe.inf
++
++  INF Binaries-fp5/QcomPkg/Drivers/SmemDxe/SmemDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/DALSYSDxe/DALSYSDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/HWIODxe/HWIODxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/ChipInfoDxe/ChipInfoDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/PlatformInfoDxe/PlatformInfoDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/HALIOMMUDxe/HALIOMMUDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/ULogDxe/ULogDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/CmdDbDxe/CmdDbDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/PwrUtilsDxe/PwrUtilsDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/NpaDxe/NpaDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/RpmhDxe/RpmhDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/VcsDxe/VcsDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/ClockDxe/ClockDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/ICBDxe/ICBDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/ShmBridgeDxe/ShmBridgeDxeLA.inf
++  INF Binaries-fp5/QcomPkg/Drivers/TzDxe/ScmDxeLA.inf
++  INF Binaries-fp5/QcomPkg/Drivers/TLMMDxe/TLMMDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/SPMIDxe/SPMIDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/I2CDxe/I2CDxe.inf
++
++  INF MdeModulePkg/Universal/ResetSystemRuntimeDxe/ResetSystemRuntimeDxe.inf
++
++  INF Binaries-fp5/QcomPkg/Drivers/PmicDxe/PmicDxeLa.inf
++
++  INF MdeModulePkg/Universal/Disk/DiskIoDxe/DiskIoDxe.inf
++  INF MdeModulePkg/Universal/Disk/PartitionDxe/PartitionDxe.inf
++  INF MdeModulePkg/Universal/Disk/UnicodeCollation/EnglishDxe/EnglishDxe.inf
++
++  INF Binaries-fp5/QcomPkg/Drivers/SdccDxe/SdccDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/UFSDxe/UFSDxe.inf
++
++  INF FatPkg/EnhancedFatDxe/Fat.inf
++
++  INF Binaries-fp5/QcomPkg/Drivers/TzDxe/TzDxeLA.inf
++
++  INF MdeModulePkg/Universal/Variable/RuntimeDxe/VariableRuntimeDxe.inf
++
++  INF Binaries-fp5/QcomPkg/Drivers/DDRInfoDxe/DDRInfoDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/FeatureEnablerDxe/FeatureEnablerDxe.inf
++
++!if $(USE_CUSTOM_DISPLAY_DRIVER) == 1
++  INF Binaries-fp5/QcomPkg/Drivers/DisplayDxe/DisplayDxe.inf
++!else
++  INF SiliciumPkg/Drivers/SimpleFbDxe/SimpleFbDxe.inf
++!endif
++
++  INF Binaries-fp5/QcomPkg/Drivers/PILProxyDxe/PILProxyDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/PILDxe/PILDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/IPCCDxe/IPCCDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/GLinkDxe/GLinkDxe.inf
++!if $(USE_CUSTOM_DISPLAY_DRIVER) == 1
++  INF Binaries-fp5/QcomPkg/Drivers/CPRDxe/CPRDxe.inf
++!endif
++
++  INF MdeModulePkg/Universal/WatchdogTimerDxe/WatchdogTimer.inf
++  INF MdeModulePkg/Universal/SecurityStubDxe/SecurityStubDxe.inf
++  INF EmbeddedPkg/EmbeddedMonotonicCounter/EmbeddedMonotonicCounter.inf
++  INF EmbeddedPkg/RealTimeClockRuntimeDxe/RealTimeClockRuntimeDxe.inf
++  INF MdeModulePkg/Universal/PrintDxe/PrintDxe.inf
++  INF MdeModulePkg/Universal/DevicePathDxe/DevicePathDxe.inf
++  INF MdeModulePkg/Universal/CapsuleRuntimeDxe/CapsuleRuntimeDxe.inf
++  INF MdeModulePkg/Universal/HiiDatabaseDxe/HiiDatabaseDxe.inf
++  INF MdeModulePkg/Universal/BdsDxe/BdsDxe.inf
++
++  INF Binaries-fp5/QcomPkg/Drivers/SPIDxe/SPIDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/PmicGlinkDxe/PmicGlinkDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/UsbPwrCtrlDxe/UsbPwrCtrlDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/QcomChargerDxe/QcomChargerDxeLA.inf
++  INF Binaries-fp5/QcomPkg/Drivers/ChargerExDxe/ChargerExDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/UsbfnDwc3Dxe/UsbfnDwc3Dxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/XhciPciEmulationDxe/XhciPciEmulationDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/XhciDxe/XhciDxe.inf
++
++  INF MdeModulePkg/Bus/Usb/UsbBusDxe/UsbBusDxe.inf
++  INF MdeModulePkg/Bus/Usb/UsbKbDxe/UsbKbDxe.inf
++  INF MdeModulePkg/Bus/Usb/UsbMassStorageDxe/UsbMassStorageDxe.inf
++
++  INF Binaries-fp5/QcomPkg/Drivers/UsbMsdDxe/UsbMsdDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/UsbDeviceDxe/UsbDeviceDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/UsbConfigDxe/UsbConfigDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/ButtonsDxe/ButtonsDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/TsensDxe/TsensDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/LimitsDxe/LimitsDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/GpiDxe/GpiDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/UCDxe/UCDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/RNGDxe/RngDxe.inf
++
++  INF EmbeddedPkg/SimpleTextInOutSerial/SimpleTextInOutSerial.inf
++  INF MdeModulePkg/Universal/Console/ConPlatformDxe/ConPlatformDxe.inf
++  INF MdeModulePkg/Universal/Console/ConSplitterDxe/ConSplitterDxe.inf
++  INF MdeModulePkg/Universal/Console/GraphicsConsoleDxe/GraphicsConsoleDxe.inf
++}
+diff --git a/Platforms/Fairphone/fp5Pkg/Include/DXE.inc b/Platforms/Fairphone/fp5Pkg/Include/DXE.inc
+new file mode 100644
+index 00000000..fe41c0ef
+--- /dev/null
++++ b/Platforms/Fairphone/fp5Pkg/Include/DXE.inc
+@@ -0,0 +1,99 @@
++  INF MdeModulePkg/Core/Dxe/DxeMain.inf
++  INF MdeModulePkg/Universal/PCD/Dxe/Pcd.inf
++
++  INF Binaries-fp5/QcomPkg/Drivers/EnvDxe/EnvDxe.inf
++
++  INF MdeModulePkg/Universal/ReportStatusCodeRouter/RuntimeDxe/ReportStatusCodeRouterRuntimeDxe.inf
++  INF MdeModulePkg/Universal/StatusCodeHandler/RuntimeDxe/StatusCodeHandlerRuntimeDxe.inf
++  INF ArmPkg/Drivers/CpuDxe/CpuDxe.inf
++  INF MdeModulePkg/Core/RuntimeDxe/RuntimeDxe.inf
++  INF MdeModulePkg/Universal/SecurityStubDxe/SecurityStubDxe.inf
++
++  INF Binaries-fp5/QcomPkg/Drivers/ShmBridgeDxe/ShmBridgeDxeLA.inf
++  INF Binaries-fp5/QcomPkg/Drivers/TzDxe/ScmDxeLA.inf
++  INF Binaries-fp5/QcomPkg/Drivers/TzDxe/TzDxeLA.inf
++
++  INF MdeModulePkg/Universal/WatchdogTimerDxe/WatchdogTimer.inf
++  INF MdeModulePkg/Universal/CapsuleRuntimeDxe/CapsuleRuntimeDxe.inf
++  INF MdeModulePkg/Universal/Variable/RuntimeDxe/VariableRuntimeDxe.inf
++  INF EmbeddedPkg/EmbeddedMonotonicCounter/EmbeddedMonotonicCounter.inf
++  INF MdeModulePkg/Universal/ResetSystemRuntimeDxe/ResetSystemRuntimeDxe.inf
++  INF EmbeddedPkg/RealTimeClockRuntimeDxe/RealTimeClockRuntimeDxe.inf
++  INF EmbeddedPkg/MetronomeDxe/MetronomeDxe.inf
++  INF MdeModulePkg/Universal/HiiDatabaseDxe/HiiDatabaseDxe.inf
++  INF ArmPkg/Drivers/ArmGicDxe/ArmGicDxe.inf
++  INF ArmPkg/Drivers/TimerDxe/TimerDxe.inf
++
++  INF Binaries-fp5/QcomPkg/Drivers/ChipInfoDxe/ChipInfoDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/PlatformInfoDxe/PlatformInfoDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/DALSYSDxe/DALSYSDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/HALIOMMUDxe/HALIOMMUDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/HWIODxe/HWIODxe.inf
++
++  INF MdeModulePkg/Universal/DevicePathDxe/DevicePathDxe.inf
++  INF MdeModulePkg/Universal/Disk/DiskIoDxe/DiskIoDxe.inf
++  INF MdeModulePkg/Universal/Disk/PartitionDxe/PartitionDxe.inf
++  INF FatPkg/EnhancedFatDxe/Fat.inf
++  INF MdeModulePkg/Universal/Disk/UnicodeCollation/EnglishDxe/EnglishDxe.inf
++
++  INF Binaries-fp5/QcomPkg/Drivers/ClockDxe/ClockDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/SdccDxe/SdccDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/I2CDxe/I2CDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/SPMIDxe/SPMIDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/TLMMDxe/TLMMDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/PmicDxe/PmicDxeLa.inf
++  INF Binaries-fp5/QcomPkg/Drivers/UFSDxe/UFSDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/CmdDbDxe/CmdDbDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/PwrUtilsDxe/PwrUtilsDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/RpmhDxe/RpmhDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/NpaDxe/NpaDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/ULogDxe/ULogDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/VcsDxe/VcsDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/ICBDxe/ICBDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/SmemDxe/SmemDxe.inf
++  INF MdeModulePkg/Universal/BdsDxe/BdsDxe.inf
++  INF EmbeddedPkg/SimpleTextInOutSerial/SimpleTextInOutSerial.inf
++  INF MdeModulePkg/Universal/PrintDxe/PrintDxe.inf
++  INF MdeModulePkg/Universal/Console/ConPlatformDxe/ConPlatformDxe.inf
++  INF MdeModulePkg/Universal/Console/ConSplitterDxe/ConSplitterDxe.inf
++  INF MdeModulePkg/Universal/Console/GraphicsConsoleDxe/GraphicsConsoleDxe.inf
++
++!if $(USE_CUSTOM_DISPLAY_DRIVER) == 1
++  INF Binaries-fp5/QcomPkg/Drivers/CPRDxe/CPRDxe.inf
++!endif
++  INF Binaries-fp5/QcomPkg/Drivers/GpiDxe/GpiDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/SPIDxe/SPIDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/FeatureEnablerDxe/FeatureEnablerDxe.inf
++
++!if $(USE_CUSTOM_DISPLAY_DRIVER) == 1
++  INF Binaries-fp5/QcomPkg/Drivers/DisplayDxe/DisplayDxe.inf
++!else
++  INF SiliciumPkg/Drivers/SimpleFbDxe/SimpleFbDxe.inf
++!endif
++
++  INF Binaries-fp5/QcomPkg/Drivers/ButtonsDxe/ButtonsDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/ChargerExDxe/ChargerExDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/IPCCDxe/IPCCDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/GLinkDxe/GLinkDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/PmicGlinkDxe/PmicGlinkDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/QcomChargerDxe/QcomChargerDxeLA.inf
++  INF Binaries-fp5/QcomPkg/Drivers/UsbPwrCtrlDxe/UsbPwrCtrlDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/TsensDxe/TsensDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/LimitsDxe/LimitsDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/DDRInfoDxe/DDRInfoDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/UsbfnDwc3Dxe/UsbfnDwc3Dxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/XhciPciEmulationDxe/XhciPciEmulationDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/XhciDxe/XhciDxe.inf
++
++  INF MdeModulePkg/Bus/Usb/UsbBusDxe/UsbBusDxe.inf
++  INF MdeModulePkg/Bus/Usb/UsbKbDxe/UsbKbDxe.inf
++  INF MdeModulePkg/Bus/Usb/UsbMassStorageDxe/UsbMassStorageDxe.inf
++
++  INF Binaries-fp5/QcomPkg/Drivers/UsbMsdDxe/UsbMsdDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/UsbDeviceDxe/UsbDeviceDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/UsbConfigDxe/UsbConfigDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/UsbInitDxe/UsbInitDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/UCDxe/UCDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/RNGDxe/RngDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/PILDxe/PILDxe.inf
++  INF Binaries-fp5/QcomPkg/Drivers/PILProxyDxe/PILProxyDxe.inf
+diff --git a/Platforms/Fairphone/fp5Pkg/Include/RAW.inc b/Platforms/Fairphone/fp5Pkg/Include/RAW.inc
+new file mode 100644
+index 00000000..98f35ac8
+--- /dev/null
++++ b/Platforms/Fairphone/fp5Pkg/Include/RAW.inc
+@@ -0,0 +1,19 @@
++  FILE FREEFORM = A1E235DE-E825-4591-9623-C43175811826 {
++    SECTION UI = "SecParti.cfg"
++    SECTION RAW = Binaries-fp5/RawFiles/SecParti.cfg
++  }
++
++  FILE FREEFORM = 21E9BDD9-6C3F-4F10-84A5-BBEC322741F1 {
++    SECTION UI = "uefipil.cfg"
++    SECTION RAW = Binaries-fp5/RawFiles/uefipil.cfg
++  }
++
++  FILE FREEFORM = 45FE4B7C-150C-45DA-A021-4BEB2048EC6F {
++    SECTION UI = "QcomChargerCfg.cfg"
++    SECTION RAW = Binaries-fp5/RawFiles/QcomChargerCfg.cfg
++  }
++
++  FILE FREEFORM = F780C779-DD7C-47CD-BD1A-5EB414C51704 {
++    SECTION UI = "BATTERY.PROVISION"
++    SECTION RAW = Binaries-fp5/RawFiles/BATTERY.PROVISION
++  }
+diff --git a/Platforms/Fairphone/fp5Pkg/Library/ConfigurationMapLib/ConfigurationMapLib.c b/Platforms/Fairphone/fp5Pkg/Library/ConfigurationMapLib/ConfigurationMapLib.c
+new file mode 100644
+index 00000000..f920dce4
+--- /dev/null
++++ b/Platforms/Fairphone/fp5Pkg/Library/ConfigurationMapLib/ConfigurationMapLib.c
+@@ -0,0 +1,59 @@
++#include <Library/ConfigurationMapLib.h>
++
++// Values from the FP5 stock uefiplat.cfg [ConfigParameters] (string entries omitted).
++
++STATIC
++EFI_CONFIGURATION_ENTRY_DESCRIPTOR
++gConfigurationDescriptor[] = {
++  // Configuration Map
++  {"NumCpusFuseAddr", 0x5C04C},
++  {"EnableShell", 0x1},
++  {"InitialPagePoolCount", 0x700},
++  {"SharedIMEMBaseAddr", 0x146AA000},
++  {"DloadCookieAddr", 0x01FD3000},
++  {"DloadCookieValue", 0x10},
++  {"NumCpus", 8},
++  {"NumActiveCores", 8},
++  {"MaxLogFileSize", 0x400000},
++  {"UefiMemUseThreshold", 0xE1},
++  {"USBHS1_Config", 0x0},
++  {"UsbFnIoRevNum", 0x00010001},
++  {"PwrBtnShutdownFlag", 0x0},
++  {"Sdc1GpioConfigOn", 0x1E92},
++  {"Sdc2GpioConfigOn", 0x1E92},
++  {"Sdc1GpioConfigOff", 0xA00},
++  {"Sdc2GpioConfigOff", 0xA00},
++  {"EnableSDHCSwitch", 0x1},
++  {"EnableUfsIOC", 1},
++  {"UfsSmmuConfigForOtherBootDev", 1},
++  {"UEFIExitUfsSSURequired", 1},
++  {"SecurityFlag", 0xC4},
++  {"DetectRetailUserAttentionHotkey", 0x00},
++  {"DetectRetailUserAttentionHotkeyCode", 0x17},
++  {"EnableOEMSetupAppInRetail", 0x0},
++  {"EnableLogFsSyncInRetail", 0x0},
++  {"ShmBridgememSize", 0xA00000},
++  {"EnableMultiThreading", 1},
++  {"MaxCoreCnt", 8},
++  {"EarlyInitCoreCnt", 2},
++  {"EnableUefiSecAppDebugLogDump", 0x0},
++  {"AllowNonPersistentVarsInRetail", 0x1},
++  {"EnableDisplayThread", 0x0},
++  {"EnableDisplayImageFv", 0x1},
++  {"DDRInfoNotifyFlag", 0x0},
++  {"EnableVariablePolicyEngine", 0},
++  {"EnableACPIFallback", 0x0},
++  {"EnableMultiCoreFvDecompression", 1},
++  {"EUDEnableAddr", 0x88E2000},
++  {"MinidumpTALoadingCfg", 0x0}
++};
++
++VOID
++GetConfigurationMap (
++  OUT EFI_CONFIGURATION_ENTRY_DESCRIPTOR **ConfigurationDescriptor,
++  OUT UINT8                               *ConfigurationDescriptorCount)
++{
++  // Pass Data
++  *ConfigurationDescriptor      = gConfigurationDescriptor;
++  *ConfigurationDescriptorCount = ARRAY_SIZE (gConfigurationDescriptor);
++}
+diff --git a/Platforms/Fairphone/fp5Pkg/Library/ConfigurationMapLib/ConfigurationMapLib.inf b/Platforms/Fairphone/fp5Pkg/Library/ConfigurationMapLib/ConfigurationMapLib.inf
+new file mode 100644
+index 00000000..82aa2f06
+--- /dev/null
++++ b/Platforms/Fairphone/fp5Pkg/Library/ConfigurationMapLib/ConfigurationMapLib.inf
+@@ -0,0 +1,14 @@
++[Defines]
++  INF_VERSION                    = 0x00010005
++  BASE_NAME                      = ConfigurationMapLib
++  FILE_GUID                      = 8E5D2A61-4C7B-4F93-A0E8-6B1C9D3F7A24
++  MODULE_TYPE                    = BASE
++  VERSION_STRING                 = 1.0
++  LIBRARY_CLASS                  = ConfigurationMapLib
++
++[Sources]
++  ConfigurationMapLib.c
++
++[Packages]
++  MdePkg/MdePkg.dec
++  QcomPkg/QcomPkg.dec
+diff --git a/Platforms/Fairphone/fp5Pkg/Library/MemoryMapLib/MemoryMapLib.c b/Platforms/Fairphone/fp5Pkg/Library/MemoryMapLib/MemoryMapLib.c
+new file mode 100644
+index 00000000..ad2c443e
+--- /dev/null
++++ b/Platforms/Fairphone/fp5Pkg/Library/MemoryMapLib/MemoryMapLib.c
+@@ -0,0 +1,73 @@
++#include <Library/MemoryMapLib.h>
++
++//
++// Fairphone 5 memory map, taken from the stock uefiplat.cfg (FP5 VT31 xbl.elf).
++// Deviation from stock: the stock "UEFI FD" region (0x9FC00000, 3 MiB) is split
++// like on other Kodiak devices: the first MiB stays "FD Reserved" (the stock XBL
++// FD left in RAM, scanned by PlatformPeiLib for the scheduler / DTB-extension
++// HOB functions), Mu's FD lives at 0x9FD00000 (2 MiB).
++//
++STATIC
++EFI_MEMORY_REGION_DESCRIPTOR
++gMemoryDescriptor[] = {
++  // Name, Address, Length, HobOption, ResourceType, ResourceAttribute, MemoryType, ArmAttribute
++
++  // DDR Regions
++  {"HYP",               0x80000000, 0x00600000, AddMem, MEM_RES, SYS_MEM_CAP, Reserv, WRITE_BACK_XN},
++  {"Axon DMA",          0x80600000, 0x00100000, AddMem, SYS_MEM, SYS_MEM_CAP, Reserv, WRITE_BACK_XN},
++  {"BOOT",              0x80700000, 0x00100000, AddMem, MEM_RES, SYS_MEM_CAP, BsData, WRITE_BACK_XN},
++  {"AOP CMD",           0x80800000, 0x00060000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN},
++  {"AOP CMD DB",        0x80860000, 0x00020000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN},
++  {"XBL Log Buffer",    0x80884000, 0x00010000, AddMem, SYS_MEM, SYS_MEM_CAP, Reserv, WRITE_BACK_XN},
++  {"SMEM",              0x80900000, 0x00200000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN},
++  {"Sched Heap",        0x83600000, 0x00400000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK_XN},
++  {"PIL Reserved",      0x85800000, 0x16F00000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN},
++  {"DXE Heap",          0x9C700000, 0x03100000, AddMem, SYS_MEM, SYS_MEM_CAP, Conv,   WRITE_BACK_XN},
++  {"FV Region",         0x9F800000, 0x00200000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK_XN},
++  {"ABOOT FV",          0x9FA00000, 0x00200000, AddMem, SYS_MEM, SYS_MEM_CAP, Reserv, WRITE_BACK_XN},
++  {"FD Reserved",       0x9FC00000, 0x00100000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK},
++  {"UEFI FD",           0x9FD00000, 0x00200000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK},
++  {"SEC Heap",          0x9FF00000, 0x0008C000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK_XN},
++  {"CPU Vectors",       0x9FF8C000, 0x00001000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK},
++  {"MMU PageTables",    0x9FF8D000, 0x00003000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK_XN},
++  {"UEFI Stack",        0x9FF90000, 0x00040000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK_XN},
++  {"Log Buffer",        0x9FFF7000, 0x00008000, AddMem, SYS_MEM, SYS_MEM_CAP, RtData, WRITE_BACK_XN},
++  {"Info Blk",          0x9FFFF000, 0x00001000, AddMem, SYS_MEM, SYS_MEM_CAP, RtData, WRITE_BACK_XN},
++  {"Kernel",            0xA0000000, 0x10000000, AddMem, SYS_MEM, SYS_MEM_CAP, Reserv, WRITE_BACK_XN},
++  {"HYP RESERVED",      0xB0000000, 0x10000000, AddMem, SYS_MEM, SYS_MEM_CAP, Reserv, WRITE_BACK_XN},
++  {"TZ Stat 4K Page",   0xC00C6000, 0x00001000, AddMem, SYS_MEM, SYS_MEM_CAP, Reserv, WRITE_BACK_XN},
++  {"TZApps Reserved",   0xC1800000, 0x03900000, HobOnlyNoCacheSetting, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN},
++  {"Guest VM",          0xD0000000, 0x10000000, AddMem, SYS_MEM, SYS_MEM_CAP, Reserv, WRITE_BACK_XN},
++  {"DBI Dump",          0xE0000000, 0x00F00000, NoHob,  MMAP_IO, INITIALIZED, Conv,   UNCACHED_UNBUFFERED_XN},
++  {"Display Reserved",  0xE1000000, 0x02400000, AddMem, MEM_RES, SYS_MEM_CAP, Reserv, WRITE_THROUGH_XN},
++
++  // Other Memory Regions
++  {"IMEM Base",         0x14680000, 0x0002B000, NoHob,  MMAP_IO, INITIALIZED, Conv,   NS_DEVICE},
++  {"IMEM Cookie Base",  0x146AA000, 0x00001000, AddDev, MMAP_IO, INITIALIZED, Conv,   NS_DEVICE},
++
++  // Register Regions
++  {"IPC_ROUTER_TOP",    0x00400000, 0x00100000, AddDev, MMAP_IO, UNCACHEABLE, MmIO,   NS_DEVICE},
++  {"SECURITY CONTROL",  0x00780000, 0x00010000, AddDev, MMAP_IO, UNCACHEABLE, MmIO,   NS_DEVICE},
++  {"PERIPH_SS_SDC1",    0x007C0000, 0x00100000, AddDev, MMAP_IO, UNCACHEABLE, MmIO,   NS_DEVICE},
++  {"QUP",               0x00900000, 0x00200000, AddDev, MMAP_IO, UNCACHEABLE, MmIO,   NS_DEVICE},
++  {"PRNG_CFG_PRNG",     0x010D0000, 0x00010000, AddDev, MMAP_IO, UNCACHEABLE, MmIO,   NS_DEVICE},
++  {"CRYPTO0 CRYPTO",    0x01DC0000, 0x00040000, AddDev, MMAP_IO, UNCACHEABLE, MmIO,   NS_DEVICE},
++  {"TCSR_TCSR_REGS",    0x01FC0000, 0x00030000, AddDev, MMAP_IO, UNCACHEABLE, MmIO,   NS_DEVICE},
++  {"PERIPH_SS",         0x08800000, 0x00200000, AddDev, MMAP_IO, UNCACHEABLE, MmIO,   NS_DEVICE},
++  {"USB2 controller",   0x08C00000, 0x00400000, AddDev, MMAP_IO, UNCACHEABLE, MmIO,   NS_DEVICE},
++  {"USB",               0x0A600000, 0x04000000, AddDev, MMAP_IO, UNCACHEABLE, MmIO,   NS_DEVICE},
++  {"AOSS",              0x0B000000, 0x04000000, AddDev, MMAP_IO, UNCACHEABLE, MmIO,   NS_DEVICE},
++  {"TLMM",              0x0F100000, 0x00300000, AddDev, MMAP_IO, UNCACHEABLE, MmIO,   NS_DEVICE},
++  {"SMMU",              0x15000000, 0x00200000, AddDev, MMAP_IO, UNCACHEABLE, MmIO,   NS_DEVICE},
++  {"APSS_HM",           0x17800000, 0x00E00000, AddDev, MMAP_IO, UNCACHEABLE, MmIO,   NS_DEVICE}
++};
++
++VOID
++GetMemoryMap (
++  OUT EFI_MEMORY_REGION_DESCRIPTOR **MemoryDescriptor,
++  OUT UINT8                         *MemoryDescriptorCount)
++{
++  // Pass Data
++  *MemoryDescriptor      = gMemoryDescriptor;
++  *MemoryDescriptorCount = ARRAY_SIZE (gMemoryDescriptor);
++}
+diff --git a/Platforms/Fairphone/fp5Pkg/Library/MemoryMapLib/MemoryMapLib.inf b/Platforms/Fairphone/fp5Pkg/Library/MemoryMapLib/MemoryMapLib.inf
+new file mode 100644
+index 00000000..ae4c0c5b
+--- /dev/null
++++ b/Platforms/Fairphone/fp5Pkg/Library/MemoryMapLib/MemoryMapLib.inf
+@@ -0,0 +1,15 @@
++[Defines]
++  INF_VERSION                    = 0x00010005
++  BASE_NAME                      = MemoryMapLib
++  FILE_GUID                      = 2C1F7E4B-9D3A-4E58-B6C0-3A9E8F1D5B72
++  MODULE_TYPE                    = BASE
++  VERSION_STRING                 = 1.0
++  LIBRARY_CLASS                  = MemoryMapLib
++
++[Sources]
++  MemoryMapLib.c
++
++[Packages]
++  ArmPkg/ArmPkg.dec
++  MdePkg/MdePkg.dec
++  SiliciumPkg/SiliciumPkg.dec
+diff --git a/Platforms/Fairphone/fp5Pkg/fp5.dec b/Platforms/Fairphone/fp5Pkg/fp5.dec
+new file mode 100644
+index 00000000..e69de29b
+diff --git a/Platforms/Fairphone/fp5Pkg/fp5.dsc b/Platforms/Fairphone/fp5Pkg/fp5.dsc
+new file mode 100644
+index 00000000..da9c25cf
+--- /dev/null
++++ b/Platforms/Fairphone/fp5Pkg/fp5.dsc
+@@ -0,0 +1,100 @@
++##
++#  Copyright (c) 2011 - 2022, ARM Limited. All rights reserved.
++#  Copyright (c) 2014, Linaro Limited. All rights reserved.
++#  Copyright (c) 2015 - 2020, Intel Corporation. All rights reserved.
++#  Copyright (c) 2018, Bingxing Wang. All rights reserved.
++#  Copyright (c) Microsoft Corporation.
++#
++#  SPDX-License-Identifier: BSD-2-Clause-Patent
++##
++
++################################################################################
++#
++# Defines Section - statements that will be processed to create a Makefile.
++#
++################################################################################
++[Defines]
++  PLATFORM_NAME                  = fp5
++  PLATFORM_GUID                  = 6F8E1C2A-5B0D-4F7E-9A31-FB5C0D7E2A11
++  PLATFORM_VERSION               = 0.1
++  DSC_SPECIFICATION              = 0x00010005
++  OUTPUT_DIRECTORY               = Build/fp5Pkg
++  SUPPORTED_ARCHITECTURES        = AARCH64
++  BUILD_TARGETS                  = RELEASE|DEBUG
++  SKUID_IDENTIFIER               = DEFAULT
++  FLASH_DEFINITION               = fp5Pkg/fp5.fdf
++  USE_CUSTOM_DISPLAY_DRIVER      = 0
++
++  #
++  # FP5 uses QCM6490 (Kodiak family, soc_id 497). KodiakPkg only knows SM7325
++  # variants; 0 is used and only affects SMBIOS strings.
++  #
++  SOC_TYPE                       = 0
++
++!include KodiakPkg/KodiakPkg.dsc.inc
++
++[PcdsFixedAtBuild]
++  #
++  # DDR Memory
++  #
++  gArmTokenSpaceGuid.PcdSystemMemoryBase|0x80000000
++
++  #
++  # UEFI Stack
++  #
++  gArmPlatformTokenSpaceGuid.PcdCPUCoresStackBase|0x9FF90000
++  gArmPlatformTokenSpaceGuid.PcdCPUCorePrimaryStackSize|0x40000
++
++  #
++  # SMBIOS
++  #
++  gSiliciumPkgTokenSpaceGuid.PcdSmbiosSystemManufacturer|"Fairphone"
++  gSiliciumPkgTokenSpaceGuid.PcdSmbiosSystemModel|"Fairphone 5"
++  gSiliciumPkgTokenSpaceGuid.PcdSmbiosSystemRetailModel|"FP5"
++  gSiliciumPkgTokenSpaceGuid.PcdSmbiosSystemRetailSku|"Fairphone_5_FP5"
++  gSiliciumPkgTokenSpaceGuid.PcdSmbiosSystemBoardModel|"Fairphone 5"
++
++  #
++  # Simple Frame Buffer
++  # NOTE: 1224x2700 is the public FP5 panel resolution, not verified against
++  # the ABL framebuffer on hardware.
++  #
++  gSiliciumPkgTokenSpaceGuid.PcdFrameBufferWidth|1224
++  gSiliciumPkgTokenSpaceGuid.PcdFrameBufferHeight|2700
++  gSiliciumPkgTokenSpaceGuid.PcdFrameBufferColorDepth|32
++
++  #
++  # Platform PEI
++  #
++  gQcomPkgTokenSpaceGuid.PcdPlatformType|"LA"
++
++  #
++  # Storage
++  #
++  gQcomPkgTokenSpaceGuid.PcdStorageIsUfs3|FALSE
++
++[LibraryClasses]
++  #
++  # Memory Libraries
++  #
++  MemoryMapLib|fp5Pkg/Library/MemoryMapLib/MemoryMapLib.inf
++
++  #
++  # QCOM Libraries
++  #
++  ConfigurationMapLib|fp5Pkg/Library/ConfigurationMapLib/ConfigurationMapLib.inf
++
++[Components]
++  #
++  # UniXNU (Device Tree boot, no ACPI tables for FP5)
++  #
++!ifdef UNIXNU
++  UniXNUPkg/Application/UniXNU/UniXNU.inf
++  UniXNUPkg/Driver/UniXNUDxe/UniXNUDxe.inf
++  UniXNUPkg/Driver/UniXNURamDiskDxe/UniXNURamDiskDxe.inf {
++    <LibraryClasses>
++      HobLib|MdePkg/Library/DxeHobLib/DxeHobLib.inf
++      FdtLib|MdePkg/Library/BaseFdtLib/BaseFdtLib.inf
++  }
++  DarwinBootPkg/Driver/DarwinBoot.inf
++!endif
+diff --git a/Platforms/Fairphone/fp5Pkg/fp5.fdf b/Platforms/Fairphone/fp5Pkg/fp5.fdf
+new file mode 100644
+index 00000000..ea44d093
+--- /dev/null
++++ b/Platforms/Fairphone/fp5Pkg/fp5.fdf
+@@ -0,0 +1,130 @@
++##
++#  Copyright (c) 2018, Linaro Limited. All rights reserved.
++#
++#  SPDX-License-Identifier: BSD-2-Clause-Patent
++##
++
++################################################################################
++#
++# FD Section
++# The [FD] Section is made up of the definition statements and a
++# description of what goes into  the Flash Device Image.  Each FD section
++# defines one flash "device" image.  A flash device image may be one of
++# the following: Removable media bootable image (like a boot floppy
++# image,) an Option ROM image (that would be "flashed" into an add-in
++# card,) a System "Flash"  image (that would be burned into a system's
++# flash) or an Update ("Capsule") image that will be used to update and
++# existing system flash.
++#
++################################################################################
++
++[FD.SILICIUM_UEFI]
++BaseAddress   = $(FD_BASE)|gArmTokenSpaceGuid.PcdFdBaseAddress # The base address of the FLASH Device.
++Size          = $(FD_SIZE)|gArmTokenSpaceGuid.PcdFdSize        # The size in bytes of the FLASH Device
++ErasePolarity = 1
++
++# This one is tricky, it must be: BlockSize * NumBlocks = Size
++BlockSize     = 0x1000
++NumBlocks     = $(FD_BLOCKS)
++
++################################################################################
++#
++# Following are lists of FD Region layout which correspond to the locations of different
++# images within the flash device.
++#
++# Regions must be defined in ascending order and may not overlap.
++#
++# A Layout Region start with a eight digit hex offset (leading "0x" required) followed by
++# the pipe "|" character, followed by the size of the region, also in hex with the leading
++# "0x" characters. Like:
++# Offset|Size
++# PcdOffsetCName|PcdSizeCName
++# RegionType <FV, DATA, or FILE>
++#
++################################################################################
++
++0x00000000|$(FD_SIZE)
++gArmTokenSpaceGuid.PcdFvBaseAddress|gArmTokenSpaceGuid.PcdFvSize
++FV = FVMAIN_COMPACT
++
++################################################################################
++#
++# FV Section
++#
++# [FV] section is used to define what components or modules are placed within a flash
++# device file.  This section also defines order the components and modules are positioned
++# within the image.  The [FV] section consists of define statements, set statements and
++# module statements.
++#
++################################################################################
++
++[FV.FvMain]
++FvNameGuid         = CD8D4C84-20AD-4073-8A28-3400FAE05941
++BlockSize          = 0x1000
++NumBlocks          = 0        # This FV gets compressed so make it just big enough
++FvAlignment        = 8        # FV alignment and FV attributes setting.
++ERASE_POLARITY     = 1
++MEMORY_MAPPED      = TRUE
++STICKY_WRITE       = TRUE
++LOCK_CAP           = TRUE
++LOCK_STATUS        = TRUE
++WRITE_DISABLED_CAP = TRUE
++WRITE_ENABLED_CAP  = TRUE
++WRITE_STATUS       = TRUE
++WRITE_LOCK_CAP     = TRUE
++WRITE_LOCK_STATUS  = TRUE
++READ_DISABLED_CAP  = TRUE
++READ_ENABLED_CAP   = TRUE
++READ_STATUS        = TRUE
++READ_LOCK_CAP      = TRUE
++READ_LOCK_STATUS   = TRUE
++
++  !include Include/APRIORI.inc
++  !include Include/DXE.inc
++  !include Include/RAW.inc
++
++  # RAM Manager
++  INF SiliciumPkg/Drivers/RamManagerDxe/RamManagerDxe.inf
++
++  # SmBios
++  INF MdeModulePkg/Universal/SmbiosDxe/SmbiosDxe.inf
++  INF SiliciumPkg/Drivers/SmBiosTableDxe/SmBiosTableDxe.inf
++
++  # UniXNU
++!ifdef UNIXNU
++  INF UniXNUPkg/Driver/UniXNURamDiskDxe/UniXNURamDiskDxe.inf
++  INF UniXNUPkg/Driver/UniXNUDxe/UniXNUDxe.inf
++  INF DarwinBootPkg/Driver/DarwinBoot.inf
++  INF UniXNUPkg/Application/UniXNU/UniXNU.inf
++!endif
++
++
++  !include QcomPkg/Extra.fdf.inc
++
++[FV.FVMAIN_COMPACT]
++FvAlignment        = 8
++ERASE_POLARITY     = 1
++MEMORY_MAPPED      = TRUE
++STICKY_WRITE       = TRUE
++LOCK_CAP           = TRUE
++LOCK_STATUS        = TRUE
++WRITE_DISABLED_CAP = TRUE
++WRITE_ENABLED_CAP  = TRUE
++WRITE_STATUS       = TRUE
++WRITE_LOCK_CAP     = TRUE
++WRITE_LOCK_STATUS  = TRUE
++READ_DISABLED_CAP  = TRUE
++READ_ENABLED_CAP   = TRUE
++READ_STATUS        = TRUE
++READ_LOCK_CAP      = TRUE
++READ_LOCK_STATUS   = TRUE
++
++  INF SiliciumPkg/Sec/Sec.inf
++
++  FILE FV_IMAGE = 9E21FD93-9C72-4c15-8C4B-E77F1DB2D792 {
++    SECTION GUIDED EE4E5898-3914-4259-9D6E-DC7BD79403CF PROCESSING_REQUIRED = TRUE {
++      SECTION FV_IMAGE = FVMAIN
++    }
++  }
++
++  !include SiliciumPkg/Common.fdf.inc
+diff --git a/Resources/Configs/fp5.toml b/Resources/Configs/fp5.toml
+new file mode 100644
+index 00000000..1a88ead0
+--- /dev/null
++++ b/Resources/Configs/fp5.toml
+@@ -0,0 +1,27 @@
++#
++# Boot Shim Configs
++#
++[boot_shim]
++requires_kernel_header = true
++
++#
++# UEFI FD Configs
++# (stock UEFI FD region 0x9FC00000 + 1 MiB, see fp5Pkg MemoryMapLib)
++#
++[uefi_fd]
++base = 0x9FD00000
++size = 0x200000
++
++#
++# Android Boot Image Kernel Configs
++#
++[boot_image_kernel]
++kernel_compression = "gzip"
++append_dtb         = true
++
++#
++# Android Boot Image Configs
++# (header v1 like lisa; RAM boot via `fastboot boot` only)
++#
++[boot_image]
++header_version = 1
+-- 
+2.39.5
+
