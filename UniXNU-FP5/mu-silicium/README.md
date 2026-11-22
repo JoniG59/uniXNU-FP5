@@ -11,6 +11,11 @@ Patches gegen Mu-Silicium `cc64daf0e05b7533995e4fd01e0f5043ec26c137` (Branch `fp
 | 0005 | `fp5.dsc`/`MemoryMapLib.c`: optionale Diagnose-Schalter `FB_DELAY` (Pause pro Framebuffer-Logzeile) und `DXE_HEAP_HIGH` (DXE Heap bei 0xE3400000 wie spacewar). Standard-Build unverändert. |
 | 0006 | `Include/APRIORI.inc`/`DXE.inc`: optionaler Schalter `NO_TZDXE` lässt `TzDxeLA` weg (Video zeigt `ASSERT_EFI_ERROR (Out of Resources)` direkt nach dem Laden von TzDxeLA). Standard-Build unverändert. |
 
+## Tools
+
+- `tools/patch-tzdxe.py <Binaries-fp5>`: erzeugt `TzDxeLA.patched.efi` (1 Byte, wie spacewar-Patch von N1kroks)
+  und lässt die INF darauf zeigen. Vor dem Build ausführen. Original bleibt unverändert; Binärdateien nicht committen.
+
 ## Anwenden
 
 ```sh

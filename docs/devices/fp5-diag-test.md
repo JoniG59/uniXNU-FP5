@@ -4,6 +4,31 @@ Stand 2026-11-22. **Keines der Images ist auf Hardware getestet.** Alle nur per 
 nie flashen, kein Slot-Wechsel. Nach einem Hänger: Power lange drücken (ca. 15–20 s); laut erstem Test reicht das
 **nicht** zuverlässig – dann Akku kurz entnehmen (beim FP5 möglich). Danach startet Android normal.
 
+## Update 2026-11-22 (2): Ursache eingegrenzt, TzDxeLA-Patch wie spacewar
+
+- Bootloader laut Video: `FP5.VT31.C.114.2026…`. `Binaries-fp5` stammt aus der **VT31**-`xbl.elf`
+  (sha256 43dac73b…, `manifest.json`) → **kein** Versions-Mismatch, diese Hypothese ist erledigt.
+- Die Assert-Zeichenkette `ASSERT_EFI_ERROR (Status = %r)` steckt in `TzDxeLA.efi` selbst – der Treiber
+  bricht also intern ab.
+- Mu-Silicium **spacewar** (gleicher Kodiak-SoC, gleiche Speicherkarte, gleiche APRIORI-Liste) nutzt eine
+  **gepatchte** `TzDxeLA.patched.efi`. Laut Device-Binaries-README: *„To make UEFI not Crash during UEFI Boot“* –
+  globale TZ-Applet-Variable von FALSE auf TRUE (Patch: N1kroks). Das ist genau 1 Byte (RVA 0xD46C, 00 → 01).
+  Sie steuert, ob beim ersten Aufruf eine TZ-App-Initialisierung (Funktion 0x3218) läuft.
+- Die FP5-Datei (Build BOOT.MXF.1.0-01040) hat dieselbe Variable an **derselben Adresse** mit identischem
+  Zugriffsmuster (2× `ldrb`, 2× `bl 0x3218; cbnz; mov w8,#1; strb`). Patch übertragen mit
+  `UniXNU-FP5/mu-silicium/tools/patch-tzdxe.py` (prüft sha256 + Befehle, schreibt nur eine Kopie
+  `TzDxeLA.patched.efi`, INF zeigt darauf; `--revert` stellt zurück).
+- Dass dieser Patch genau den „Out of Resources“-Abbruch behebt, ist eine **begründete Annahme**, nicht belegt.
+
+| Datei | Inhalt |
+|---|---|
+| `diag-G-mu-tzpatch-v1.img` | Mu ohne UniXNU, TzDxeLA **gepatcht**, Header v1, 0,15 s/Zeile |
+| `diag-G-mu-tzpatch-v3.img` | wie oben, Header v3 |
+| `diag-H-unixnu-tzpatch-v3.img` | UniXNU-Build, TzDxeLA gepatcht, Header v3, 0,15 s/Zeile |
+
+**Reihenfolge jetzt:** G-v1 → G-v3 → H. Falls G an derselben Stelle hängt: E-v1 (ganz ohne TzDxeLA).
+Ziel: kommt das Log über `TzDxeLA.efi` hinaus, und erscheint am Ende das Mu-Menü bzw. die Fastboot-App?
+
 ## Update 2026-11-22: Auswertung des ersten Videos
 
 Quelle: Video vom Nutzer (`VID_20261122_144808.mp4`, nicht im Repo), Einzelbild bei ca. 14,5 s, abgelesen aus
@@ -21,7 +46,7 @@ unscharfem Kamerabild – einzelne Zeichen unsicher.
 
 **Befund:** Der Abbruch passiert direkt beim Laden von **TzDxeLA** (ungepatcht, aus VT32) mit „Out of Resources“.
 UniXNU/DarwinBoot werden erst später geladen und sind damit **nicht** die Ursache dieses Fehlers.
-Warum TzDxeLA keine Ressourcen bekommt (Speicherbereich, Hypervisor/SHM-Bridge, VT31-vs-VT32), ist **offen**.
+Warum TzDxeLA keine Ressourcen bekommt, war offen – siehe Update (2) oben.
 Dass der Bildschirm danach schwarz wird und das Gerät hängt statt stehen zu bleiben, deutet (Hypothese) auf einen
 Absturz/Hänger auf TrustZone-/Hypervisor-Ebene nach dem fehlgeschlagenen TZ-Aufruf hin.
 
