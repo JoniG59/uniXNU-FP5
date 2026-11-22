@@ -12,7 +12,7 @@ Patches gegen Mu-Silicium `cc64daf0e05b7533995e4fd01e0f5043ec26c137` (Branch `fp
 ```sh
 git clone https://github.com/Project-Silicium/Mu-Silicium && cd Mu-Silicium
 git checkout cc64daf0e05b7533995e4fd01e0f5043ec26c137 -b fp5
-git am /pfad/zu/UniXNU-FP5/mu-silicium/patches/*.patch
+git am --keep-cr /pfad/zu/UniXNU-FP5/mu-silicium/patches/*.patch   # Mu-Silicium nutzt CRLF
 ```
 
 ## Proprietäre Treiber (nicht im Repo)
