@@ -145,7 +145,7 @@ def main():
         r["sha256"] = {k: hashlib.sha256(w.blobs[k]).hexdigest() for k in r["blobs"]}
     inv = {"source": str(src), "source_sha256": hashlib.sha256(d).hexdigest(),
            "fv_segments": segs, "files": w.files,
-           "notice": "VT32 factory reference; analysis only, not the installed VT31 firmware."}
+           "notice": "Extracted from a Fairphone factory xbl.elf; proprietary firmware, do not redistribute."}
     (out / "inventory.json").write_text(json.dumps(inv, indent=1))
     print(f"FV segments: {segs}")
     print(f"FFS files: {len(w.files)}  blobs: {len(w.blobs)}  -> {out}")
