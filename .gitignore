@@ -9,3 +9,7 @@ out/
 .cache/
 *.img
 *.dtb
+
+# Python caches
+__pycache__/
+*.pyc
