@@ -4,6 +4,12 @@ Stand 2026-11-22. **Keines der Images ist auf Hardware getestet.** Alle nur per 
 nie flashen, kein Slot-Wechsel. Nach einem Hänger: Power lange drücken (ca. 15–20 s); laut erstem Test reicht das
 **nicht** zuverlässig – dann Akku kurz entnehmen (beim FP5 möglich). Danach startet Android normal.
 
+## Update 2026-11-22 (4): selbst bauen, DTB korrigiert
+
+- Bauanleitung und Skript: `UniXNU-FP5/mu-silicium/README.md` → „boot_a..d selbst bauen", Skript `UniXNU-FP5/mu-silicium/tools/build-boot-diag.sh`.
+- **DTB-Fehler gefunden:** Das bisher verwendete `fp5.dtb` war über dtc (dts → dtb) gelaufen und unterschied sich vom Factory-DTB (vendor_boot Index 16) in genau einer Eigenschaft: `qcom,init-voltage` = `02 4b 00` statt `00 32 4b 00` (3,296 V). Alle bisherigen Images (diag-A..H, boot_a..d aus Update 3, boot-unixnu.img) enthalten dieses DTB. Ob das den Absturz beeinflusst, ist offen (Hypothese: eher nicht, der Assert kommt aus TzDxeLA).
+- boot_a..d sind mit dem unveränderten Factory-DTB neu gebaut (VM, `hardware_tested=false`). Die SHA256 aus Update 3 gelten nicht mehr; eigene Builds haben ohnehin andere SHA256 (FD nicht bit-reproduzierbar).
+
 ## Update 2026-11-22 (3): boot_a … boot_d (A–D mit gepatchter TzDxeLA)
 
 Die Varianten A–D wurden mit der gepatchten `TzDxeLA.patched.efi` (spacewar-Patch, 1 Byte bei RVA 0xD46C) neu gebaut, je mit `FB_DELAY=150000` (0,15 s pro Logzeile). `diag-A..D-*.img` sind dadurch ebenfalls neu und byte-gleich zu `boot_a..d.img`. Alle Images: FD + DTB im Kernel geprüft (`fd_match=true`), `hardware_tested=false`. Images liegen nur lokal in `out/fp5-mu/diag/` und `out/fp5-mu/boot/`.
