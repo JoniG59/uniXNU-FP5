@@ -6,6 +6,7 @@ Patches gegen Mu-Silicium `cc64daf0e05b7533995e4fd01e0f5043ec26c137` (Branch `fp
 |---|---|
 | 0001 | SEC reicht das ABL-Einsprungsargument (x0 = FDT-Zeiger) als GUID-HOB `DAEE82E6-8090-4E72-BFB9-78C13CD4E359` weiter (für UniXNURamDiskDxe). |
 | 0002 | `Platforms/Fairphone/fp5Pkg` + `Resources/Configs/fp5.toml`. |
+| 0003 | `fp5.dsc`: im `!ifdef UNIXNU`-Block die LibraryClasses `UniXNULib` (UniXNUPkg) und `FdtLib` (MdePkg/BaseFdtLib) eintragen; nötig für den Build mit `BLD_*_UNIXNU=1`. |
 
 ## Anwenden
 

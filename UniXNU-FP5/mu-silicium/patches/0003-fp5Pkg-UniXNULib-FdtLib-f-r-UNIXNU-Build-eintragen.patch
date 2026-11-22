@@ -1,0 +1,35 @@
+From ac75dabc249ce495d4f456a85dfb7ad1171d299b Mon Sep 17 00:00:00 2001
+From: JoniG59 <JoniG59@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 12:51:07 +0000
+Subject: [PATCH] =?UTF-8?q?fp5Pkg:=20UniXNULib/FdtLib=20f=C3=BCr=20UNIXNU-?=
+ =?UTF-8?q?Build=20eintragen?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ Platforms/Fairphone/fp5Pkg/fp5.dsc | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/Platforms/Fairphone/fp5Pkg/fp5.dsc b/Platforms/Fairphone/fp5Pkg/fp5.dsc
+index da9c25cf..4f1af9d5 100644
+--- a/Platforms/Fairphone/fp5Pkg/fp5.dsc
++++ b/Platforms/Fairphone/fp5Pkg/fp5.dsc
+@@ -84,6 +84,14 @@
+   #
+   ConfigurationMapLib|fp5Pkg/Library/ConfigurationMapLib/ConfigurationMapLib.inf
+ 
++!ifdef UNIXNU
++  #
++  # UniXNU
++  #
++  UniXNULib|UniXNUPkg/Library/UniXNULib/UniXNULib.inf
++  FdtLib|MdePkg/Library/BaseFdtLib/BaseFdtLib.inf
++!endif
++
+ [Components]
+   #
+   # UniXNU (Device Tree boot, no ACPI tables for FP5)
+-- 
+2.39.5
+
