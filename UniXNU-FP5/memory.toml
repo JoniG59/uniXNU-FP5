@@ -1,0 +1,282 @@
+# FP5 public reference memory configuration.
+# This is a source record for the board DTS and the FP5 memory-map checker;
+# UniXNU's build currently consumes the matching values in board.toml/FP5.dts.
+schema_version = 1
+
+[dram]
+base = "0x80000000"
+size = "0x200000000"
+end_inclusive = "0x27fffffff"
+confidence = "public-reference"
+source = "FOSDEM 2024 Luca Weiss slide: edited /proc/iomem on fairphone-fp5"
+note = "One contiguous 8-GiB System RAM aperture. Factory DTB /memory is zero-filled by the bootloader and does not contradict this reference."
+
+[bringup]
+enabled_cpus = 1
+darwinboot_owned_memory_size = "0x40000000"
+confidence = "provisional-policy"
+note = "1-GiB initial XNU-owned allocation window; not a hardware reservation. Increase only after the UEFI map and XNU high-water use are observable."
+
+[[fixed_reservation]]
+name = "hyp"
+base = "0x80000000"
+size = "0x600000"
+kind = "EL2/hypervisor"
+confidence = "VT32-factory-DTB16"
+
+[[fixed_reservation]]
+name = "xbl_aop_mem"
+base = "0x80700000"
+size = "0x160000"
+kind = "XBL/AOP"
+confidence = "VT32-factory-DTB16"
+
+[[fixed_reservation]]
+name = "cmd_db"
+base = "0x80860000"
+size = "0x20000"
+kind = "firmware command database"
+confidence = "VT32-factory-DTB16"
+
+[[fixed_reservation]]
+name = "reserved_xbl_uefi"
+base = "0x80880000"
+size = "0x14000"
+kind = "UEFI/XBL"
+confidence = "VT32-factory-DTB16"
+
+[[fixed_reservation]]
+name = "secdata_apss"
+base = "0x808ff000"
+size = "0x1000"
+kind = "secure APSS data"
+confidence = "VT32-factory-DTB16"
+
+[[fixed_reservation]]
+name = "smem"
+base = "0x80900000"
+size = "0x200000"
+kind = "shared memory"
+confidence = "VT32-factory-DTB16"
+
+[[fixed_reservation]]
+name = "firmware"
+base = "0x80b00000"
+size = "0x100000"
+kind = "firmware"
+confidence = "VT32-factory-DTB16"
+
+[[fixed_reservation]]
+name = "wlan_fw"
+base = "0x80c00000"
+size = "0xc00000"
+kind = "WLAN firmware"
+confidence = "VT32-factory-DTB16"
+
+[[fixed_reservation]]
+name = "cdsp_secure_heap"
+base = "0x81800000"
+size = "0x1e00000"
+kind = "secure CDSP heap"
+confidence = "VT32-factory-DTB16"
+
+[[fixed_reservation]]
+name = "camera_pil"
+base = "0x86200000"
+size = "0x500000"
+kind = "camera firmware"
+confidence = "VT32-factory-DTB16"
+
+[[fixed_reservation]]
+name = "adsp"
+base = "0x86700000"
+size = "0x2800000"
+kind = "audio DSP firmware"
+confidence = "VT32-factory-DTB16"
+
+[[fixed_reservation]]
+name = "cdsp"
+base = "0x88f00000"
+size = "0x1e00000"
+kind = "compute DSP firmware"
+confidence = "VT32-factory-DTB16"
+
+[[fixed_reservation]]
+name = "video"
+base = "0x8ad00000"
+size = "0x500000"
+kind = "video firmware"
+confidence = "VT32-factory-DTB16"
+
+[[fixed_reservation]]
+name = "cvp"
+base = "0x8b200000"
+size = "0x500000"
+kind = "video processing firmware"
+confidence = "VT32-factory-DTB16"
+
+[[fixed_reservation]]
+name = "ipa_fw"
+base = "0x8b700000"
+size = "0x10000"
+kind = "IPA firmware"
+confidence = "VT32-factory-DTB16"
+
+[[fixed_reservation]]
+name = "ipa_gsi"
+base = "0x8b710000"
+size = "0xa000"
+kind = "IPA GSI"
+confidence = "VT32-factory-DTB16"
+
+[[fixed_reservation]]
+name = "gpu_micro_code"
+base = "0x8b71a000"
+size = "0x2000"
+kind = "GPU microcode"
+confidence = "VT32-factory-DTB16"
+
+[[fixed_reservation]]
+name = "mpss"
+base = "0x8b800000"
+size = "0xf600000"
+kind = "modem firmware"
+confidence = "VT32-factory-DTB16"
+
+[[fixed_reservation]]
+name = "wlan"
+base = "0x9ae00000"
+size = "0x1900000"
+kind = "WLAN remote processor"
+confidence = "VT32-factory-DTB16"
+
+[[fixed_reservation]]
+name = "ramoops"
+base = "0xa9000000"
+size = "0x200000"
+kind = "persistent crash log"
+confidence = "VT32-factory-DTB16"
+
+[[fixed_reservation]]
+name = "removed_region"
+base = "0xc0000000"
+size = "0x5100000"
+kind = "removed/unavailable memory"
+confidence = "VT32-factory-DTB16"
+
+[[fixed_reservation]]
+name = "pil_trustedvm_region"
+base = "0xd0800000"
+size = "0x76f7000"
+kind = "trusted VM / secure world"
+confidence = "VT32-factory-DTB16"
+
+[[fixed_reservation]]
+name = "qrtr-shmem"
+base = "0xd7ef7000"
+size = "0x9000"
+kind = "remote processor shared memory"
+confidence = "VT32-factory-DTB16"
+
+[[fixed_reservation]]
+name = "neuron_block_0"
+base = "0xd7f00000"
+size = "0x80000"
+kind = "remote processor shared memory"
+confidence = "VT32-factory-DTB16"
+
+[[fixed_reservation]]
+name = "neuron_block_1"
+base = "0xd7f80000"
+size = "0x80000"
+kind = "remote processor shared memory"
+confidence = "VT32-factory-DTB16"
+
+[[fixed_reservation]]
+name = "splash_region"
+base = "0xe1000000"
+size = "0x2300000"
+kind = "continuous display splash buffer"
+confidence = "VT32-DTBO32-merged"
+
+[[fixed_reservation]]
+name = "dfps_data_memory"
+base = "0xe3300000"
+size = "0x100000"
+kind = "display FPS metadata"
+confidence = "VT32-factory-DTB16"
+
+[[fixed_reservation]]
+name = "rmtfs_mem"
+base = "0xf8500000"
+size = "0x600000"
+kind = "remote modem file system"
+confidence = "Linux-mainline-FP5-DTS-only"
+note = "Defined by the current FP5 board DTS after deleting the generic Kodiak rmtfs reservation; not found as a fixed interval in the analyzed VT32 vendor DTB."
+
+# These are size-only shared-dma-pool declarations from the VT32 DTB. Their
+# actual physical placement is runtime allocation and must not be invented.
+[[dynamic_pool]]
+name = "adsp_region"
+size = "0xc00000"
+alignment = "0x400000"
+reusable = true
+
+[[dynamic_pool]]
+name = "user_contig_region"
+size = "0x1000000"
+alignment = "0x400000"
+reusable = true
+
+[[dynamic_pool]]
+name = "qseecom_region"
+size = "0x1400000"
+alignment = "0x400000"
+reusable = true
+
+[[dynamic_pool]]
+name = "non_secure_display_region"
+size = "0x6400000"
+alignment = "0x400000"
+reusable = true
+
+[[dynamic_pool]]
+name = "qseecom_ta_region"
+size = "0x1000000"
+alignment = "0x400000"
+reusable = true
+
+[[dynamic_pool]]
+name = "secure_display_region"
+size = "0x8c00000"
+alignment = "0x400000"
+reusable = true
+
+[[dynamic_pool]]
+name = "linux,cma"
+size = "0x2000000"
+alignment = "0x400000"
+reusable = true
+
+[[dynamic_pool]]
+name = "mem_dump_region"
+size = "0x2c00000"
+reusable = true
+
+[[dynamic_pool]]
+name = "audio_cma_region"
+size = "0x1c00000"
+alignment = "0x400000"
+reusable = true
+
+[[dynamic_pool]]
+name = "memshare_region"
+size = "0x800000"
+alignment = "0x100000"
+no_map = true
+
+[[dynamic_pool]]
+name = "cnss_wlan_region"
+size = "0x1400000"
+alignment = "0x400000"
+reusable = true

@@ -1,0 +1,16 @@
+# GERUEST - abgeleitet aus der Struktur von UniXNU-sm8550-common.
+# Keine Hardwarewerte aus SM8550 uebernommen.
+"schema_version" = 2
+
+["soc"]
+"name" = "qcm6490"
+"description" = "Qualcomm QCM6490 (Kodiak / SC7280-Familie)"
+# Quelle der Hardwarebeschreibung: Linux mainline arch/arm64/boot/dts/qcom/kodiak.dtsi
+"source_repository" = "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
+"source_revision" = "TODO"  # Commit fuer kodiak.dtsi und FP5-DTS pinnen
+
+["components"]
+# FP5 uses the QCM6490 A6xx GPU family. Keep acceleration out until an
+# A6xx-compatible KMD, GPUCC/GMU/SMMU support and matching firmware are pinned.
+# Adreno740 is A7xx and must not be selected for this SoC.
+"include" = ["ArmCpu", "ArmDTPlatform"]

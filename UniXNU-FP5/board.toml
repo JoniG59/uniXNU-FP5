@@ -1,0 +1,56 @@
+# PORTIERUNGSGERUEST - NICHT BAUBAR. Hardwaredaten sind teilweise offen.
+schema_version = 2
+
+[board]
+name = "FP5"
+soc = "QCM6490"            # Fairphone 5 = Qualcomm QCM6490 (nicht SM7635/SM8550)
+soc_source = "qcm6490"      # lokale Entwicklungsquelle in local.toml
+os_profile = "ipados-17.7.11-21H461"
+description = "Fairphone 5 (FP5), QCM6490"
+kit = "FP5"
+example = true             # gesperrt, bis FP5-UEFI und XNU-Plattformpfad bereit sind
+
+[components]
+include = ["ArmDTPlatform", "ArmCpu", "SoftwareAES", "RamBlock", "XnuPrelink", "DarwinBoot", "GopFramebuffer", "AppleKeyStoreState"]
+
+[device_tree]
+source = "device:dts/FP5.dts"
+include_dirs = ["soc:dts"]
+
+[kernel]
+defconfig = "FP5_defconfig"
+machine_config = "QCM6490" # XNU arm64 machine target for Cortex-A55/A78; SMP remains disabled in the FP5 DT
+config_fragments = ["soc:configs/qcm6490.config"]
+patch_series = ["soc:patches/xnu/series"]
+
+[kernel.prelink]
+kernel = "build/xnu/ios-obj/DEVELOPMENT_ARM64_QCM6490/mach.development.qcm6490.unstripped"
+native_only = true # no matching FP5 Apple kernelcache/kext set exists yet
+
+[firmware]
+config = "TODO"  # RAM-only: Mu-Silicium FD wird in ein temporaeres boot.img gepackt
+dsc = "TODO"
+fd = "TODO"
+
+[bootimg.image]
+header_version = 3 # Factory boot.img ist v3; Ziel: temporaeres `fastboot boot`, kein Flash
+pagesize = 4096
+base = 0x00000000 # FP5 Android device tree BoardConfig.mk; v3 enthält keine physischen Kernel-Ladeadressen
+kernel_offset = 0x00008000 # veröffentlichte FP5-Image-Referenz; bei v3 kein Header-Ladefeld
+tags_offset = 0x00000100 # veröffentlichte FP5-Image-Referenz; bei v3 kein Header-Ladefeld
+dtb_offset = 0x01f00000 # BoardConfig-Parameter; bei v3 keine DTB-Adresse im boot.img-Header
+
+[payload]
+dram_size = "0x200000000"  # oeffentliche FP5-Referenz: 8 GiB ab 0x80000000
+kernel_args = ["-v"]        # TODO serial=? erst wenn UART bekannt
+
+[payload.adt]
+owned_memory_size = "0x40000000" # vorlaeufiges 1-GiB-Fenster; kein Hardware-Carveout
+
+# Geraeteausgabe vom 2026-11-11 wurde in fastbootd erfasst; siehe
+# docs/porting/fp5-hardware.md. Keine Werte daraus als Bootloader-Fakten werten.
+# product=FP5, slot-count=2, current-slot=b, unlocked=yes, secure=yes
+# first-api-level=33; Factory boot.img/vendor_boot.img are both header v3
+# boot_a/b = 0x6000000 (96 MiB), vendor_boot_a/b = 0x6000000, dtbo = 0x1800000
+# max-download-size = 0x10000000 (256 MiB) -> Grenze fuer `fastboot boot`
+# UFS-LUNs sda..sdf, sda = 0x3A10800000 (~232 GiB), userdata ~214 GiB

@@ -1,0 +1,11 @@
+# Abacus input material (factory ZIPs, device captures, extracted binaries)
+/abacus-*/
+
+# Local/private device observations and generated build products
+fp5-getvar.txt
+fp5-iomem.txt
+fp5.dtb
+out/
+.cache/
+*.img
+*.dtb

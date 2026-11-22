@@ -1,0 +1,175 @@
+diff --git a/NativeAdrenoCpInit.cpp b/NativeAdrenoCpInit.cpp
+index 64c2bd2..0b1764f 100644
+--- a/NativeAdrenoCpInit.cpp
++++ b/NativeAdrenoCpInit.cpp
+@@ -2,6 +2,7 @@
+ #include "NativeAdrenoCpInit.h"
+ #include "AdrenoPM4.h"
+ #include <IOKit/IOLib.h>
++#include <string.h>
+ 
+ /* Pinned definitions: CP_SQE_INSTR_BASE is the 64-bit register at dword offset
+  * 0x0830 for A6XX..A7XX (a6xx.xml). CP_THREAD_CONTROL is opcode 0x17 with
+@@ -16,7 +17,9 @@ enum : uint32_t {
+     CpMeInitOpcode = 0x48,
+     CpConcurrentBinDisable = 1u << 27,
+     CpMeInitWords = 8,
+-    CpInitWords = 10
++    CpInitWords = 10,
++    CpA6xxMeInitPayloadWords = 10,
++    CpA6xxInitWords = 1 + CpA6xxMeInitPayloadWords
+ };
+ IOReturn NativeAdrenoCpInit::poison()
+ {
+@@ -26,6 +29,13 @@ uint32_t NativeAdrenoCpInit::meInitMask()
+ {
+     return (1u<<0)|(1u<<1)|(1u<<3)|(1u<<6)|(1u<<8);
+ }
++uint32_t NativeAdrenoCpInit::a6xxMeInitMask()
++{
++    /* CP_INIT_MASK in the pinned KGSL a6xx_cp_init_cmds(): ordinals
++     * MAX_CONTEXT, ERROR_DETECTION, DEFAULT_RESET_STATE,
++     * UCODE_WORKAROUND, OPERATION_MODE and REGISTER_INIT_LIST_WITH_SPINLOCK. */
++    return (1u<<0)|(1u<<1)|(1u<<3)|(1u<<5)|(1u<<6)|(1u<<8);
++}
+ IOReturn NativeAdrenoCpInit::run(const NativeAdrenoRingIo *io,NativeAdrenoRing *ring,
+     const NativeAdrenoCpInitConfig *config,uint32_t *fence,bool fenced)
+ {
+@@ -60,3 +70,32 @@ IOReturn NativeAdrenoCpInit::run(const NativeAdrenoRingIo *io,NativeAdrenoRing *
+     done_=true;*fence=value;
+     return kIOReturnSuccess;
+ }
++IOReturn NativeAdrenoCpInit::buildA6xxMeInit(uint64_t pwrup_reglist_iova,
++    uint32_t *words,size_t capacity,size_t *written)
++{
++    if(!written)return kIOReturnBadArgument;
++    *written=0;
++    if(!words || capacity<CpA6xxInitWords || !pwrup_reglist_iova ||
++        (pwrup_reglist_iova&3) || pwrup_reglist_iova>=UINT64_C(1)<<48)
++        return kIOReturnBadArgument;
++    /* From KGSL's a6xx_cp_init_cmds(), A6XX_CP_INIT_DWORDS=11. The mask
++     * chooses exactly the payload fields below; header-dump and workaround
++     * fields are present as zeroes. Unlike gen7_cp_init_cmds(), this path
++     * does not send CP_THREAD_CONTROL or the GEN7 bit-31 dynamic-list flag. */
++    uint32_t packet[CpA6xxInitWords]={0};
++    if(AdrenoPM4Type7(CpMeInitOpcode,CpA6xxMeInitPayloadWords,&packet[0])!=AdrenoPM4Success)
++        return kIOReturnBadArgument;
++    packet[1]=a6xxMeInitMask();
++    packet[2]=0x00000003; /* three hardware contexts */
++    packet[3]=0x20000000; /* error detection */
++    packet[4]=0;           /* header dump address */
++    packet[5]=0;           /* header dump disabled */
++    packet[6]=0;           /* ucode workaround mask */
++    packet[7]=0x00000002; /* operation mode */
++    packet[8]=(uint32_t)pwrup_reglist_iova;
++    packet[9]=(uint32_t)(pwrup_reglist_iova>>32);
++    packet[10]=0;          /* register-init spinlock */
++    memcpy(words,packet,sizeof(packet));
++    *written=CpA6xxInitWords;
++    return kIOReturnSuccess;
++}
+diff --git a/NativeAdrenoCpInit.h b/NativeAdrenoCpInit.h
+index 502aefd..48d151f 100644
+--- a/NativeAdrenoCpInit.h
++++ b/NativeAdrenoCpInit.h
+@@ -34,5 +34,11 @@ public:
+     bool completed() const {return done_;}
+     bool poisoned() const {return poisoned_;}
+     static uint32_t meInitMask();
++    static uint32_t a6xxMeInitMask();
++    /* Build the A6XX CP_ME_INIT packet only. The caller must provide a
++     * separately validated A6XX-format register list; this never touches
++     * MMIO or submits work. On failure, output stays unchanged. */
++    static IOReturn buildA6xxMeInit(uint64_t pwrup_reglist_iova,
++        uint32_t *words,size_t capacity,size_t *written);
+ };
+ #endif
+diff --git a/NativeAdrenoPwrup.cpp b/NativeAdrenoPwrup.cpp
+index d604c14..fe12b95 100644
+--- a/NativeAdrenoPwrup.cpp
++++ b/NativeAdrenoPwrup.cpp
+@@ -4,6 +4,16 @@
+ #include <string.h>
+ #include "NativeAdrenoPwrupRegs.h"
+ enum : size_t { HeaderBytes=16, PairBytes=8, TripletBytes=12 };
++static bool rangeValid(const void *p,size_t bytes)
++{
++    const uintptr_t at=reinterpret_cast<uintptr_t>(p);
++    return p && bytes && bytes-1<=UINTPTR_MAX-at;
++}
++static bool rangesOverlap(const void *a,size_t na,const void *b,size_t nb)
++{
++    const uintptr_t aa=reinterpret_cast<uintptr_t>(a),bb=reinterpret_cast<uintptr_t>(b);
++    return aa<=bb?bb-aa<na:aa-bb<nb;
++}
+ size_t NativeAdrenoPwrupList::requiredBytes(const NativeAdrenoPwrupCounts &counts)
+ {
+     return HeaderBytes+size_t(counts.ifpc+counts.preemption)*PairBytes+
+@@ -21,6 +31,48 @@ IOReturn NativeAdrenoPwrupList::buildA740(int (*read)(void *,uint32_t,uint32_t *
+     return pack(counts,nullptr,nullptr,NativeAdrenoA740PwrupRegs,values,nullptr,
+         out,capacity,written);
+ }
++IOReturn NativeAdrenoPwrupList::packA6xx(uint32_t ifpc_count,const uint32_t *ifpc_regs,
++    const uint32_t *ifpc_values,uint32_t preemption_count,const uint32_t *preemption_regs,
++    const uint32_t *preemption_values,uint8_t *out,size_t capacity,size_t *written)
++{
++    if(!written)return kIOReturnBadArgument;
++    *written=0;
++    if(!out || ifpc_count>0xffffu/2 || preemption_count>0xffffu/2 ||
++        ifpc_count>0xffffu/2-preemption_count ||
++        (ifpc_count && (!ifpc_regs || !ifpc_values)) ||
++        (preemption_count && (!preemption_regs || !preemption_values)))
++        return kIOReturnBadArgument;
++    const size_t ifpc_bytes=size_t(ifpc_count)*sizeof(uint32_t);
++    const size_t preemption_bytes=size_t(preemption_count)*sizeof(uint32_t);
++    const size_t pair_count=size_t(ifpc_count)+preemption_count;
++    const size_t needed=HeaderBytes+pair_count*PairBytes;
++    if(capacity<needed)return kIOReturnNoResources;
++    if(!rangeValid(out,needed) ||
++        (ifpc_count && (!rangeValid(ifpc_regs,ifpc_bytes) || !rangeValid(ifpc_values,ifpc_bytes) ||
++            rangesOverlap(out,needed,ifpc_regs,ifpc_bytes) || rangesOverlap(out,needed,ifpc_values,ifpc_bytes))) ||
++        (preemption_count && (!rangeValid(preemption_regs,preemption_bytes) ||
++            !rangeValid(preemption_values,preemption_bytes) ||
++            rangesOverlap(out,needed,preemption_regs,preemption_bytes) ||
++            rangesOverlap(out,needed,preemption_values,preemption_bytes))))
++        return kIOReturnBadArgument;
++
++    /* KGSL struct cpu_gpu_lock: three lock words, then u16 list_length and
++     * u16 list_offset. A6XX counts dwords after the 16-byte header. */
++    const uint32_t header[4]={0,0,0,
++        ((ifpc_count*2u)<<16)|(ifpc_count*2u+preemption_count*2u)};
++    memcpy(out,header,sizeof(header));
++    size_t offset=HeaderBytes;
++    for(uint32_t i=0;i<ifpc_count;++i) {
++        memcpy(out+offset,ifpc_regs+i,sizeof(uint32_t));offset+=sizeof(uint32_t);
++        memcpy(out+offset,ifpc_values+i,sizeof(uint32_t));offset+=sizeof(uint32_t);
++    }
++    for(uint32_t i=0;i<preemption_count;++i) {
++        memcpy(out+offset,preemption_regs+i,sizeof(uint32_t));offset+=sizeof(uint32_t);
++        memcpy(out+offset,preemption_values+i,sizeof(uint32_t));offset+=sizeof(uint32_t);
++    }
++    *written=needed;
++    return kIOReturnSuccess;
++}
+ IOReturn NativeAdrenoPwrupList::pack(const NativeAdrenoPwrupCounts &counts,
+     const uint32_t *ifpc_regs,const uint32_t *ifpc_values,
+     const uint32_t *preemption_regs,const uint32_t *preemption_values,
+diff --git a/NativeAdrenoPwrup.h b/NativeAdrenoPwrup.h
+index fa95865..240bbb3 100644
+--- a/NativeAdrenoPwrup.h
++++ b/NativeAdrenoPwrup.h
+@@ -30,6 +30,14 @@ public:
+      * counts. A read failure refuses and writes nothing. */
+     static IOReturn buildA740(int (*read)(void *,uint32_t,uint32_t *),void *cookie,
+         uint8_t *out,size_t capacity,size_t *written);
++    /* Pack the A6XX cpu_gpu_lock header and its IFPC/preemption
++     * {register,value} pairs. Input values must be captured from the powered
++     * GPU by the caller; this routine performs no MMIO. Output stays
++     * unchanged on failure. */
++    static IOReturn packA6xx(uint32_t ifpc_count,const uint32_t *ifpc_regs,
++        const uint32_t *ifpc_values,uint32_t preemption_count,
++        const uint32_t *preemption_regs,const uint32_t *preemption_values,
++        uint8_t *out,size_t capacity,size_t *written);
+     static IOReturn pack(const NativeAdrenoPwrupCounts &,
+         const uint32_t *ifpc_regs,const uint32_t *ifpc_values,
+         const uint32_t *preemption_regs,const uint32_t *preemption_values,

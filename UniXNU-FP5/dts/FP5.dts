@@ -1,0 +1,57 @@
+/dts-v1/;
+/include/ "qcm6490.dtsi"
+
+/*
+ * FP5 first-pass board description.
+ * RAM follows the public FOSDEM 2024 /proc/iomem reference (8 GiB). The
+ * factory DTB's zero-filled /memory is a bootloader placeholder, not a size.
+ * See docs/porting/fp5-memory-map.md for confidence and reservation details.
+ * Other fixed and dynamic reservations are recorded in memory.toml. The
+ * display splash carveout is included here because it backs the GOP scanout.
+ */
+/ {
+	model = "Fairphone 5";
+	compatible = "fairphone,fp5", "qcom,qcm6490";
+
+	chosen {
+		/*
+		 * Fairphone's FP5 Linux DTS describes the firmware scanout this way.
+		 * UEFI GOP remains the source of the live base/stride/format at XNU
+		 * handoff; this node records the expected FP5 mode and reservation.
+		 */
+		framebuffer {
+			compatible = "simple-framebuffer";
+			memory-region = <&cont_splash_mem>;
+			width = <1224>;
+			height = <2700>;
+			stride = <4896>;
+			format = "a8r8g8b8";
+		};
+	};
+
+	memory@80000000 {
+		device_type = "memory";
+		reg = <0 0x80000000 0x2 0>;
+	};
+
+	/* VT32 vendor DTB and upstream FP5 DTS agree on this splash carveout. */
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		cont_splash_mem: framebuffer@e1000000 {
+			reg = <0 0xe1000000 0 0x2300000>;
+			no-map;
+		};
+	};
+};
+
+/* Start with the boot CPU only until XNU secondary startup is ported/verified. */
+&cpu_l1 { status = "disabled"; };
+&cpu_l2 { status = "disabled"; };
+&cpu_l3 { status = "disabled"; };
+&cpu_b0 { status = "disabled"; };
+&cpu_b1 { status = "disabled"; };
+&cpu_b2 { status = "disabled"; };
+&cpu_b3 { status = "disabled"; };
