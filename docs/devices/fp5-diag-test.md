@@ -1,7 +1,42 @@
 # FP5: Diagnose „kurz Log, dann schwarzer Bildschirm“
 
 Stand 2026-11-22. **Keines der Images ist auf Hardware getestet.** Alle nur per `fastboot boot <img>` (RAM) starten –
-nie flashen, kein Slot-Wechsel. Nach jedem Versuch: Power lange drücken (ca. 10–15 s) → normaler Neustart ins Android.
+nie flashen, kein Slot-Wechsel. Nach einem Hänger: Power lange drücken (ca. 15–20 s); laut erstem Test reicht das
+**nicht** zuverlässig – dann Akku kurz entnehmen (beim FP5 möglich). Danach startet Android normal.
+
+## Update 2026-11-22: Auswertung des ersten Videos
+
+Quelle: Video vom Nutzer (`VID_20261122_144808.mp4`, nicht im Repo), Einzelbild bei ca. 14,5 s, abgelesen aus
+unscharfem Kamerabild – einzelne Zeichen unsicher.
+
+- Kopfzeile: „Project Silicium for Fairphone Fairphone 5 / Firmware Version 4.1 Build at 12:3?:04“. Das Log läuft
+  ohne Pause → es war **kein** Diagnose-Image (A–D haben 0,15 s Pause pro Zeile). Welches Image es war
+  (`noot.img` oder `boot-unixnu.img`), ist aus dem Video nicht sicher ablesbar.
+- Ablauf bis zum Ende normal: DxeCore, Speicherzuteilungen, Qualcomm-DXE (…, PmicDxe, DiskIo, Partition, English,
+  SdccDxe, UFSDxe), `UFS MEMORY ID: SAMSUNG KM8F9001JM-B813 0700`, `UFS Boot LUN: 2`, `Fat.efi`, **`TzDxeLA.efi`**.
+- Letzte Zeilen:
+  `ASSERT_EFI_ERROR (Status = Out of Resources)`
+  `ERROR: C50000002:V03000007 I0 8452C463-4B2E-4F92-8969-33E1…` (GUID-Ende unleserlich)
+- Danach schwarz; das Gerät reagiert auf nichts mehr, nur Akku-Entnahme hilft.
+
+**Befund:** Der Abbruch passiert direkt beim Laden von **TzDxeLA** (ungepatcht, aus VT32) mit „Out of Resources“.
+UniXNU/DarwinBoot werden erst später geladen und sind damit **nicht** die Ursache dieses Fehlers.
+Warum TzDxeLA keine Ressourcen bekommt (Speicherbereich, Hypervisor/SHM-Bridge, VT31-vs-VT32), ist **offen**.
+Dass der Bildschirm danach schwarz wird und das Gerät hängt statt stehen zu bleiben, deutet (Hypothese) auf einen
+Absturz/Hänger auf TrustZone-/Hypervisor-Ebene nach dem fehlgeschlagenen TZ-Aufruf hin.
+
+Neue Varianten (Patch 0006, Schalter `BLD_*_NO_TZDXE=1`, ScmDxeLA bleibt drin; Variablen sind im Mu-Build ohnehin
+emuliert, `PcdEmuVariableNvModeEnable = TRUE`):
+
+| Datei | Inhalt |
+|---|---|
+| `diag-E-mu-notz-v3.img` | Mu ohne UniXNU, **ohne TzDxeLA**, Header v3, 0,15 s/Zeile |
+| `diag-E-mu-notz-v1.img` | wie oben, Header v1 (wie `noot.img`) |
+| `diag-F-unixnu-notz-v3.img` | UniXNU-Build ohne TzDxeLA, Header v3, 0,15 s/Zeile |
+
+**Neue Reihenfolge:** zuerst **E-v1** (gleiches Header-Format wie `noot.img`), dann E-v3, dann F. A–D sind damit
+zweitrangig (sie enthalten TzDxeLA und laufen sehr wahrscheinlich in denselben Fehler).
+Treiber, die TzDxe brauchen (z.B. RNG, PIL, Charger), laden dann evtl. nicht – das ist für den Test erwartet.
 
 ## Beobachtung
 

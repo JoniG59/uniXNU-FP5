@@ -9,6 +9,7 @@ Patches gegen Mu-Silicium `cc64daf0e05b7533995e4fd01e0f5043ec26c137` (Branch `fp
 | 0003 | `fp5.dsc`: im `!ifdef UNIXNU`-Block die LibraryClasses `UniXNULib` (UniXNUPkg) und `FdtLib` (MdePkg/BaseFdtLib) eintragen; nötig für den Build mit `BLD_*_UNIXNU=1`. |
 | 0004 | `Resources/Configs/fp5.toml`: Boot-Image-Header v3 statt v1 (wie FP5-Stock-`boot.img` und Mu-`spacewar`, gleicher Kodiak-SoC); passt zu `board.toml [bootimg.image] header_version = 3`. |
 | 0005 | `fp5.dsc`/`MemoryMapLib.c`: optionale Diagnose-Schalter `FB_DELAY` (Pause pro Framebuffer-Logzeile) und `DXE_HEAP_HIGH` (DXE Heap bei 0xE3400000 wie spacewar). Standard-Build unverändert. |
+| 0006 | `Include/APRIORI.inc`/`DXE.inc`: optionaler Schalter `NO_TZDXE` lässt `TzDxeLA` weg (Video zeigt `ASSERT_EFI_ERROR (Out of Resources)` direkt nach dem Laden von TzDxeLA). Standard-Build unverändert. |
 
 ## Anwenden
 

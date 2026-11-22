@@ -1,0 +1,41 @@
+From 83ffa874b859d26e0ec07abc5091d8559f68ee7c Mon Sep 17 00:00:00 2001
+From: JoniG59 <JoniG59@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 13:59:32 +0000
+Subject: [PATCH] fp5Pkg: Diagnose-Schalter NO_TZDXE (TzDxeLA weglassen)
+
+---
+ Platforms/Fairphone/fp5Pkg/Include/APRIORI.inc | 2 ++
+ Platforms/Fairphone/fp5Pkg/Include/DXE.inc     | 2 ++
+ 2 files changed, 4 insertions(+)
+
+diff --git a/Platforms/Fairphone/fp5Pkg/Include/APRIORI.inc b/Platforms/Fairphone/fp5Pkg/Include/APRIORI.inc
+index aaddce2b..fae8063e 100644
+--- a/Platforms/Fairphone/fp5Pkg/Include/APRIORI.inc
++++ b/Platforms/Fairphone/fp5Pkg/Include/APRIORI.inc
+@@ -45,7 +45,9 @@ APRIORI DXE {
+ 
+   INF FatPkg/EnhancedFatDxe/Fat.inf
+ 
++!ifndef NO_TZDXE
+   INF Binaries-fp5/QcomPkg/Drivers/TzDxe/TzDxeLA.inf
++!endif
+ 
+   INF MdeModulePkg/Universal/Variable/RuntimeDxe/VariableRuntimeDxe.inf
+ 
+diff --git a/Platforms/Fairphone/fp5Pkg/Include/DXE.inc b/Platforms/Fairphone/fp5Pkg/Include/DXE.inc
+index fe41c0ef..547ba15f 100644
+--- a/Platforms/Fairphone/fp5Pkg/Include/DXE.inc
++++ b/Platforms/Fairphone/fp5Pkg/Include/DXE.inc
+@@ -11,7 +11,9 @@
+ 
+   INF Binaries-fp5/QcomPkg/Drivers/ShmBridgeDxe/ShmBridgeDxeLA.inf
+   INF Binaries-fp5/QcomPkg/Drivers/TzDxe/ScmDxeLA.inf
++!ifndef NO_TZDXE
+   INF Binaries-fp5/QcomPkg/Drivers/TzDxe/TzDxeLA.inf
++!endif
+ 
+   INF MdeModulePkg/Universal/WatchdogTimerDxe/WatchdogTimer.inf
+   INF MdeModulePkg/Universal/CapsuleRuntimeDxe/CapsuleRuntimeDxe.inf
+-- 
+2.39.5
+
