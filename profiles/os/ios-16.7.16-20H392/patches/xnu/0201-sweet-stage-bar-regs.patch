@@ -1,0 +1,16 @@
+--- a/osfmk/arm64/start.s
++++ b/osfmk/arm64/start.s
+@@ -834,6 +834,10 @@
+ 
+-#if defined(SWEET)
+-	SWEET_STAGE_BAR 2152, 0x00ff0000	/* C: about to enter arm_init */
+-#endif
+ 	// Return to arm_init()
++	/*
++	 * openplus: no stage bar here.  SWEET_STAGE_BAR draws through x0, and
++	 * x0 already holds the physical boot_args pointer that arm_init takes
++	 * as its argument; drawing here handed arm_init a framebuffer address
++	 * (ARGS p=9dd21300 instead of DarwinBoot's args@0x8d240000).  Saving
++	 * the registers is not safe this early either, so the bar goes away.
++	 */
+ 	ret

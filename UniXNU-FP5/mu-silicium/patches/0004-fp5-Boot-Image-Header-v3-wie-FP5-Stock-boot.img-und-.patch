@@ -1,0 +1,28 @@
+From 05ee8b6e95cb30c30e69082d0bf9fc88726dcca2 Mon Sep 17 00:00:00 2001
+From: JoniG59 <JoniG59@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 12:53:02 +0000
+Subject: [PATCH] fp5: Boot-Image-Header v3 (wie FP5-Stock-boot.img und
+ spacewar)
+
+---
+ Resources/Configs/fp5.toml | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/Resources/Configs/fp5.toml b/Resources/Configs/fp5.toml
+index 1a88ead0..a5b73905 100644
+--- a/Resources/Configs/fp5.toml
++++ b/Resources/Configs/fp5.toml
+@@ -21,7 +21,8 @@ append_dtb         = true
+ 
+ #
+ # Android Boot Image Configs
+-# (header v1 like lisa; RAM boot via `fastboot boot` only)
++# (header v3 like the FP5 stock boot.img and spacewar (same Kodiak SoC);
++#  RAM boot via `fastboot boot` only)
+ #
+ [boot_image]
+-header_version = 1
++header_version = 3
+-- 
+2.39.5
+

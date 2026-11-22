@@ -5,7 +5,7 @@ schema_version = 2
 name = "FP5"
 soc = "QCM6490"            # Fairphone 5 = Qualcomm QCM6490 (nicht SM7635/SM8550)
 soc_source = "qcm6490"      # lokale Entwicklungsquelle in local.toml
-os_profile = "ipados-17.7.11-21H461"
+os_profile = "ios-16.7.16-20H392" # aus refs/unixnu-dragon kopiert (profiles/os/)
 description = "Fairphone 5 (FP5), QCM6490"
 kit = "FP5"
 example = true             # gesperrt, bis FP5-UEFI und XNU-Plattformpfad bereit sind
@@ -28,9 +28,28 @@ kernel = "build/xnu/ios-obj/DEVELOPMENT_ARM64_QCM6490/mach.development.qcm6490.u
 native_only = true # no matching FP5 Apple kernelcache/kext set exists yet
 
 [firmware]
-config = "TODO"  # RAM-only: Mu-Silicium FD wird in ein temporaeres boot.img gepackt
-dsc = "TODO"
-fd = "TODO"
+# RAM-only: Mu-Silicium FD wird in ein temporaeres boot.img gepackt (nur `fastboot boot`, nie flashen).
+# Mu-Silicium-Checkout mit UniXNU-FP5/mu-silicium/patches/0001-0004 (Branch fp5).
+config = "fp5"  # Resources/Configs/fp5.toml im Mu-Silicium-Checkout
+dsc = "Platforms/Fairphone/fp5Pkg/fp5.dsc"
+fd = "Build/fp5Pkg/{target}_CLANGPDB/FV/SILICIUM_UEFI.fd"
+# Entspricht CommonPlatform.PackagesPath in fp5Pkg/DeviceBuild.py plus den UniXNU-Paketen
+# ({edk2} = Mu_Basecore des Checkouts).
+packages = [
+  "{uefi}/Platforms/Fairphone",
+  "{uefi}/Common/Mu",
+  "{uefi}/Common/Mu_OEM_Sample",
+  "{edk2}",
+  "{uefi}/Silicon/Qualcomm",
+  "{uefi}/Silicon/Silicium",
+  "{uefi}/Silicium-ACPI",
+  "{uefi}/Silicium-ACPI/Silicon/Qualcomm",
+  "{tree}/package",
+  "{tree}/drivers/DarwinBoot",
+]
+
+[firmware.defines]
+UNIXNU = "1"  # aktiviert die !ifdef-UNIXNU-Bloecke in fp5.dsc/fp5.fdf
 
 [bootimg.image]
 header_version = 3 # Factory boot.img ist v3; Ziel: temporaeres `fastboot boot`, kein Flash
