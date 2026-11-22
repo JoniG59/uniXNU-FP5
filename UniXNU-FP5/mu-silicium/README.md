@@ -8,6 +8,7 @@ Patches gegen Mu-Silicium `cc64daf0e05b7533995e4fd01e0f5043ec26c137` (Branch `fp
 | 0002 | `Platforms/Fairphone/fp5Pkg` + `Resources/Configs/fp5.toml`. |
 | 0003 | `fp5.dsc`: im `!ifdef UNIXNU`-Block die LibraryClasses `UniXNULib` (UniXNUPkg) und `FdtLib` (MdePkg/BaseFdtLib) eintragen; nötig für den Build mit `BLD_*_UNIXNU=1`. |
 | 0004 | `Resources/Configs/fp5.toml`: Boot-Image-Header v3 statt v1 (wie FP5-Stock-`boot.img` und Mu-`spacewar`, gleicher Kodiak-SoC); passt zu `board.toml [bootimg.image] header_version = 3`. |
+| 0005 | `fp5.dsc`/`MemoryMapLib.c`: optionale Diagnose-Schalter `FB_DELAY` (Pause pro Framebuffer-Logzeile) und `DXE_HEAP_HIGH` (DXE Heap bei 0xE3400000 wie spacewar). Standard-Build unverändert. |
 
 ## Anwenden
 
@@ -31,6 +32,9 @@ python3 scripts/gen-fp5-mu-binaries.py out/fp5-uefi-inputs/xbl-fv/inventory.json
 
 ## Stand / offene Punkte
 
+- **Erster Hardware-Bericht (2026-11-22):** `boot-unixnu.img` zeigt ca. 1 s Log, danach schwarzer Bildschirm.
+  Patch 0005 fügt Diagnose-Schalter hinzu (`BLD_*_FB_DELAY=<µs>`, `BLD_*_DXE_HEAP_HIGH=1`); Diagnose-Images und
+  Testplan: `docs/devices/fp5-diag-test.md`. Ohne die Schalter ist der Build unverändert.
 - **UniXNU-Build (2026-11-22), nicht auf Hardware getestet.** FD mit `BLD_*_UNIXNU=1` (UniXNU, UniXNUDxe,
   UniXNURamDiskDxe, DarwinBoot), gepackt mit `scripts/unixnu/bootimg.py` → `out/fp5-mu/boot-unixnu.img`
   (Header v3, gzip(BootShim+FD)+DTB, leere Ramdisk). Enthält **keinen** XNU-Kernel und kein iOS.

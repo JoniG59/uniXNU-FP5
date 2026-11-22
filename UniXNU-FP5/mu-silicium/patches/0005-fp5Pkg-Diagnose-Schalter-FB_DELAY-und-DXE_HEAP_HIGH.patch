@@ -1,0 +1,70 @@
+From 1a19134e25b87090f734febb683433991cb4fe92 Mon Sep 17 00:00:00 2001
+From: JoniG59 <JoniG59@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 13:25:30 +0000
+Subject: [PATCH] fp5Pkg: Diagnose-Schalter FB_DELAY und DXE_HEAP_HIGH
+
+---
+ .../fp5Pkg/Library/MemoryMapLib/MemoryMapLib.c  |  6 ++++++
+ Platforms/Fairphone/fp5Pkg/fp5.dsc              | 17 +++++++++++++++++
+ 2 files changed, 23 insertions(+)
+
+diff --git a/Platforms/Fairphone/fp5Pkg/Library/MemoryMapLib/MemoryMapLib.c b/Platforms/Fairphone/fp5Pkg/Library/MemoryMapLib/MemoryMapLib.c
+index ad2c443e..75faee41 100644
+--- a/Platforms/Fairphone/fp5Pkg/Library/MemoryMapLib/MemoryMapLib.c
++++ b/Platforms/Fairphone/fp5Pkg/Library/MemoryMapLib/MemoryMapLib.c
+@@ -22,7 +22,9 @@ gMemoryDescriptor[] = {
+   {"SMEM",              0x80900000, 0x00200000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN},
+   {"Sched Heap",        0x83600000, 0x00400000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK_XN},
+   {"PIL Reserved",      0x85800000, 0x16F00000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN},
++#ifndef FP5_DXE_HEAP_HIGH
+   {"DXE Heap",          0x9C700000, 0x03100000, AddMem, SYS_MEM, SYS_MEM_CAP, Conv,   WRITE_BACK_XN},
++#endif
+   {"FV Region",         0x9F800000, 0x00200000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK_XN},
+   {"ABOOT FV",          0x9FA00000, 0x00200000, AddMem, SYS_MEM, SYS_MEM_CAP, Reserv, WRITE_BACK_XN},
+   {"FD Reserved",       0x9FC00000, 0x00100000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK},
+@@ -40,6 +42,10 @@ gMemoryDescriptor[] = {
+   {"Guest VM",          0xD0000000, 0x10000000, AddMem, SYS_MEM, SYS_MEM_CAP, Reserv, WRITE_BACK_XN},
+   {"DBI Dump",          0xE0000000, 0x00F00000, NoHob,  MMAP_IO, INITIALIZED, Conv,   UNCACHED_UNBUFFERED_XN},
+   {"Display Reserved",  0xE1000000, 0x02400000, AddMem, MEM_RES, SYS_MEM_CAP, Reserv, WRITE_THROUGH_XN},
++#ifdef FP5_DXE_HEAP_HIGH
++  // Diagnose-Variante: Lage wie spacewar (Kodiak), frei laut FP5-DTB reserved-memory
++  {"DXE Heap",          0xE3400000, 0x03100000, AddMem, SYS_MEM, SYS_MEM_CAP, Conv,   WRITE_BACK_XN},
++#endif
+ 
+   // Other Memory Regions
+   {"IMEM Base",         0x14680000, 0x0002B000, NoHob,  MMAP_IO, INITIALIZED, Conv,   NS_DEVICE},
+diff --git a/Platforms/Fairphone/fp5Pkg/fp5.dsc b/Platforms/Fairphone/fp5Pkg/fp5.dsc
+index 4f1af9d5..3f27ed0f 100644
+--- a/Platforms/Fairphone/fp5Pkg/fp5.dsc
++++ b/Platforms/Fairphone/fp5Pkg/fp5.dsc
+@@ -63,6 +63,14 @@
+   gSiliciumPkgTokenSpaceGuid.PcdFrameBufferHeight|2700
+   gSiliciumPkgTokenSpaceGuid.PcdFrameBufferColorDepth|32
+ 
++  #
++  # Diagnose: Verzoegerung pro Framebuffer-Logzeile in Mikrosekunden
++  # (z.B. BLD_*_FB_DELAY=200000), damit das Log am Geraet lesbar bleibt.
++  #
++!ifdef FB_DELAY
++  gSiliciumPkgTokenSpaceGuid.PcdFrameBufferDelay|$(FB_DELAY)
++!endif
++
+   #
+   # Platform PEI
+   #
+@@ -106,3 +114,12 @@
+   }
+   DarwinBootPkg/Driver/DarwinBoot.inf
+ !endif
++
++[BuildOptions]
++  #
++  # Diagnose: DXE Heap wie bei spacewar hinter Display Reserved (0xE3400000)
++  # statt Stock-Lage 0x9C700000 (BLD_*_DXE_HEAP_HIGH=1).
++  #
++!ifdef DXE_HEAP_HIGH
++  *_CLANGPDB_*_CC_FLAGS = -D FP5_DXE_HEAP_HIGH
++!endif
+-- 
+2.39.5
+
