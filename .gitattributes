@@ -16,3 +16,4 @@ docs/.vitepress/device-records/*.toml -whitespace
 *.bin binary
 *.a binary
 *.o binary
+UniXNU-FP5/mu-silicium/patches/*.patch -text
