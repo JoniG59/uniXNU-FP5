@@ -29,7 +29,12 @@ python3 scripts/gen-fp5-mu-binaries.py out/fp5-uefi-inputs/xbl-fv/inventory.json
 
 ## Stand / offene Punkte
 
-- **Nicht gebaut und nicht auf Hardware getestet.**
+- **Gebaut (2026-11-22), nicht auf Hardware getestet.** `python3 build_uefi.py -d fp5 -r DEBUG` → `Mu-fp5.img`
+  (Android-Boot-Header v1, FD 0x200000 Bytes, DTB = `vendor_boot` DTB 16 „YUPIK-IOT“ aus der VT32-Analyse, lokal nach
+  `Resources/DTBs/fp5.dtb` kompiliert und nicht im Repo).
+  Lokale Prüfsummen: `noot.img` c185eb2b…2158, `SILICIUM_UEFI.fd` d9f48dcd…8b68 (Stand ohne UniXNU-Module).
+- Build-Abhängigkeiten: nasm, iasl (acpica-tools), mono-devel, uuid-dev, gcc-aarch64-linux-gnu, venv mit `pip-requirements.txt`.
+- `build_uefi.py` verändert beim Setup Dateien im Submodul `Mu_Basecore` (Mu-eigener Ablauf, nicht Teil dieser Patches).
 - FD liegt bei 0x9FD00000 (2 MiB); 0x9FC00000–0x9FD00000 bleibt „FD Reserved“ (Stock-FD im RAM, wie bei lisa).
 - Framebuffer 1224×2700 ist eine Annahme und nicht gegen den ABL-Framebuffer geprüft.
 - TzDxeLA ist ungepatcht (lisa nutzt eine gepatchte Variante); Absturz möglich.
