@@ -280,3 +280,20 @@ name = "cnss_wlan_region"
 size = "0x1400000"
 alignment = "0x400000"
 reusable = true
+
+# Stock Qualcomm UEFI memory map from the VT32 xbl.elf (uefiplat.cfg, FFS
+# dde58710-41cd-4306-dbfb-3fa90bb1d2dd inside the FV at 0x9fc00000). Extracted
+# with scripts/extract-fp5-xbl-uefi.py and checked by scripts/check-fp5-uefiplat.py.
+# VT32 reference only; not yet compared with the installed VT31 xbl.
+[uefi_stock_map]
+source = "VT32 xbl.elf -> uefiplat.cfg (Version 3)"
+confidence = "VT32-factory-xbl"
+uefi_fd_base = "0x9fc00000"
+uefi_fd_size = "0x300000"
+kernel_region_base = "0xa0000000"
+kernel_region_size = "0x10000000"
+dxe_heap_base = "0x9c700000"
+dxe_heap_size = "0x3100000"
+display_reserved_base = "0xe1000000"
+display_reserved_size = "0x2400000"
+note = "FD base/size are the stock UEFI FD region and a candidate for the Mu FD; whether the region is free after ABL hands off a fastboot-boot image is not device-verified."

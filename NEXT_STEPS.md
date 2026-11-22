@@ -63,6 +63,24 @@ Liegt jetzt als `UniXNU-qcm6490-common/` in diesem Repo. Hardwarewerte sind
 noch TODO. Der aus SM8550 übernommene SMP-Patch bleibt ein ungeprüfter
 Kandidat und ist deshalb nicht in der Patch-Serie aktiviert.
 
+## Update 2026-11-22: Stock-UEFI aus VT32-`xbl.elf` entpackt
+Geändert/neu: `scripts/extract-fp5-xbl-uefi.py`, `scripts/check-fp5-uefiplat.py`,
+Abschnitt `[uefi_stock_map]` in `UniXNU-FP5/memory.toml`, Abschnitt in
+`UniXNU-FP5/firmware/PORTING.md`. Bestehender Inhalt unverändert.
+
+- **Verifiziert (VT32-Datei):** Die komprimierten XBL-Sektionen sind gzip
+  (GUID `1d301fe9-…`), nicht LZMA – darum scheiterte FMMT. Entpackt: 127
+  FFS-Dateien, darunter 90 DXE-Treiber (UFS, Clock, PMIC, RPMh, Display, USB …)
+  und die Stock-Speicherkarte `uefiplat.cfg`.
+- **`UEFI FD` = `0x9fc00000`, Größe `0x300000` (3 MiB)**; `Kernel`-Bereich
+  `0xa0000000`, 256 MiB; `Display Reserved` `0xe1000000`, 36 MiB.
+  Prüfskript: keine Überlappungen, alles im 8-GiB-Fenster, kein Konflikt mit
+  den DTB-Reservierungen.
+- **Wahrscheinlich:** Panel-Konfiguration `Panel_rm692e5_boe_amoled_cmd.xml`
+  (1224×2700, DSI 4 Lanes, DSC) ist das FP5-Panel.
+- **Offen:** ob VT31 dieselbe Karte nutzt; ob der FD-Bereich nach ABL-Übergabe
+  bei `fastboot boot` frei ist. Ein Mu-`fp5Pkg` existiert weiterhin nicht.
+
 ## Noch offen (Blocker)
 1. UEFI-Firmware (Mu-Silicium) für FP5/QCM6490 – existiert nicht, muss portiert werden. Ohne sie gibt es kein bootfähiges Image.
 2. Speicherkarte: Bitte aus /e/OS liefern (Root nötig): `adb shell su -c 'cat /proc/iomem' > fp5-iomem.txt` und `adb shell su -c 'cat /sys/firmware/fdt' > fp5.dtb`.

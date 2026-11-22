@@ -75,6 +75,40 @@ source archive. Feed these files to UEFIReader or another firmware-volume
 inspection tool when available; retain extracted drivers and their provenance
 outside source control.
 
+## XBL UEFI firmware volume (update 2026-11-22)
+
+The compressed XBL sections are not EDK2 LZMA: their GUIDed-section GUID is
+`1d301fe9-be79-4353-91c2-d23bc959ae0c` and the payload is a plain gzip stream
+(`1f 8b`). `scripts/extract-fp5-xbl-uefi.py` decodes it without FMMT and walks
+the FV at `0x9fc00000` (ELF phdr 8, file offset `0x93000`, size `0x271000`):
+
+- 127 FFS files: 1 SEC core, 1 DxeCore, 90 DXE drivers, 2 applications
+  (`QcomChargerApp`, `Ebl`), 31 freeform/config files, 2 nested FVs.
+- Present drivers include `UFSDxe`, `ClockDxe`, `PmicDxe`, `RpmhDxe`,
+  `SmemDxe`, `DisplayDxe`, `UsbfnDwc3Dxe`, `ArmGicDxe`, `ArmTimerDxe`,
+  `ButtonsDxe`, `TzDxeLA`, `ScmDxeLA`, `PILDxe`, `VerifiedBootDxe`.
+- `Panel_rm692e5_boe_amoled_cmd.xml` describes a 1224x2700, 4-lane DSI panel
+  with DSC (slice 1224x60). This matches the public FP5 resolution and the
+  Linux `raydium,rm692e5` panel; it is the strongest local panel candidate,
+  but the selected panel is not device-verified.
+- `uefiplat.cfg` (Version 3) is the stock UEFI memory map. Relevant entries:
+  `UEFI FD` `0x9fc00000` + `0x300000`, `SEC Heap` `0x9ff00000` + `0x8c000`,
+  `UEFI Stack` `0x9ff90000` + `0x40000`, `DXE Heap` (Conv) `0x9c700000` +
+  `0x3100000`, `ABOOT FV` `0x9fa00000` + `0x200000`, `Kernel` `0xa0000000` +
+  `0x10000000`, `Display Reserved` `0xe1000000` + `0x2400000` (splash 35 MiB
+  plus the 1-MiB dfps block from DTB 16).
+- `scripts/check-fp5-uefiplat.py` confirms the 26 entries do not overlap, lie
+  inside the 8-GiB reference aperture and that no Conv region intersects a
+  fixed DTB reservation in `memory.toml`.
+
+Consequences: the FP5 FD candidate is now `0x9fc00000`, maximum `0x300000`
+bytes (stock UEFI FD region), instead of a borrowed `lisa` value. The
+`0x9fc00000–0x9fe71000` XBL load segment flagged in the ELF audit *is* this FV,
+so it is the stock UEFI's own region, not an unrelated conflict. Still
+unverified: that this region is free when ABL starts a `fastboot boot` image,
+and that VT31 uses the same map. The extracted binaries stay in the ignored
+`out/fp5-uefi-inputs/xbl-fv/` tree with SHA-256 values in `inventory.json`.
+
 ## SoC package selection
 
 The current Mu-Silicium tree has a Qualcomm `KodiakPkg`; its shipped `lisa`
