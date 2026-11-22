@@ -78,9 +78,17 @@ Abschnitt `[uefi_stock_map]` in `UniXNU-FP5/memory.toml`, Abschnitt in
   den DTB-Reservierungen.
 - **Wahrscheinlich:** Panel-Konfiguration `Panel_rm692e5_boe_amoled_cmd.xml`
   (1224×2700, DSI 4 Lanes, DSC) ist das FP5-Panel.
-- **Offen:** ob VT31 dieselbe Karte nutzt; ob der FD-Bereich nach ABL-Übergabe
-  bei `fastboot boot` frei ist. Ein Mu-`fp5Pkg` existiert weiterhin nicht.
+- **Nachtrag VT31 (selber Tag):** Das offizielle `FP5-VT31-factory.zip` ist
+  noch öffentlich. SHA-256 stimmt mit dem Fairphone-Wert überein. Ergebnis:
+  `uefiplat.cfg`, alle DXE-Treiber, alle 22 DTBs und alle 68 DTBOs sind
+  **byteidentisch** zu VT32 (Skript `scripts/compare-fp5-factory-dt.py`).
+  Die VT32-Werte gelten also auch für VT31. Annahme (nicht am Gerät geprüft):
+  /e/OS VT31 nutzt Fairphones VT31-Firmware.
+- **Offen:** ob der FD-Bereich nach ABL-Übergabe bei `fastboot boot` frei ist.
+  Ein Mu-`fp5Pkg` existiert weiterhin nicht. 6-GB-Variante hat keine eigene
+  Referenz (`uefiplat.cfg` enthält keine RAM-Größe; Qualcomm-UEFI liest sie
+  zur Laufzeit über DDR-Info/SMEM).
 
 ## Noch offen (Blocker)
 1. UEFI-Firmware (Mu-Silicium) für FP5/QCM6490 – existiert nicht, muss portiert werden. Ohne sie gibt es kein bootfähiges Image.
-2. Speicherkarte: Bitte aus /e/OS liefern (Root nötig): `adb shell su -c 'cat /proc/iomem' > fp5-iomem.txt` und `adb shell su -c 'cat /sys/firmware/fdt' > fp5.dtb`.
+2. ~~Speicherkarte~~ – seit 2026-11-22 optional: `uefiplat.cfg` (VT31 = VT32) liefert die UEFI-Karte; ein Root-Dump wäre nur noch eine Gegenprobe am Gerät (kein Root vorhanden). Ursprünglich: `adb shell su -c 'cat /proc/iomem' > fp5-iomem.txt` und `adb shell su -c 'cat /sys/firmware/fdt' > fp5.dtb`.

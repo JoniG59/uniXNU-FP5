@@ -105,9 +105,30 @@ Consequences: the FP5 FD candidate is now `0x9fc00000`, maximum `0x300000`
 bytes (stock UEFI FD region), instead of a borrowed `lisa` value. The
 `0x9fc00000–0x9fe71000` XBL load segment flagged in the ELF audit *is* this FV,
 so it is the stock UEFI's own region, not an unrelated conflict. Still
-unverified: that this region is free when ABL starts a `fastboot boot` image,
-and that VT31 uses the same map. The extracted binaries stay in the ignored
+unverified: that this region is free when ABL starts a `fastboot boot` image.
+(The VT31 map was checked afterwards, see below.) The extracted binaries stay in the ignored
 `out/fp5-uefi-inputs/xbl-fv/` tree with SHA-256 values in `inventory.json`.
+
+### VT31 comparison (2026-11-22)
+
+`FP5-VT31-factory.zip` was fetched from
+`https://android-builds.fairphone.com/FP5/A15/FP5-VT31-factory.zip`
+(3,112,038,644 bytes; SHA-256 `478bf3f246ef0a9d6a8fab279cf8dd712cb6f353e520f1977c6edbaede3880f8`,
+identical to the value Fairphone published for FP5.VT31.C.114). All eight
+used images passed `sha256sum -c` against the package's `SHA256SUMS`.
+
+- The firmware files themselves differ in hash between VT31 and VT32.
+- The XBL FV has the same location (`0x9fc00000`, `0x271000`) and the same
+  127 FFS files. 124 files are byte-identical, including `uefiplat.cfg`
+  and every DXE driver; only the SEC core and `Ebl` differ.
+- `scripts/compare-fp5-factory-dt.py`: all 22 vendor_boot DTBs and all 68
+  DTBO entries are byte-identical between VT31 and VT32 (DTB 16 and DTBOs
+  32/55/63 additionally checked against the earlier VT32 extraction).
+
+Therefore the memory map, FD region and DT reference values in this port
+apply to the **VT31 factory package** as well. The installed /e/OS VT31 build
+was not read out; it is assumed (not verified) to ship Fairphone's VT31
+firmware.
 
 ## SoC package selection
 
